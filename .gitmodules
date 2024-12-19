@@ -7,3 +7,6 @@
 [submodule "Flagger/Snakemake-Flagger"]
 	path = Flagger/Snakemake-Flagger
 	url = https://github.com/koisland/Snakemake-Flagger.git
+[submodule "misasim/Snakemake-NucFlag"]
+	path = misasim/Snakemake-NucFlag
+	url = https://github.com/logsdon-lab/Snakemake-NucFlag

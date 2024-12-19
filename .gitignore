@@ -2,4 +2,6 @@ logs/
 .snakemake/
 hifi
 assembly
+alignment
+results/
 *.done

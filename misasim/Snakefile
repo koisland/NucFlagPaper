@@ -1,0 +1,70 @@
+from os.path import join
+
+HIFI_DIR = join("HG002", "hifi")
+GLOB_HIFI = join(HIFI_DIR, "{fname}.fastq.gz")
+HIFI_FNAMES = glob_wildcards(GLOB_HIFI).fname
+
+
+rule extract_aln_regions:
+    input:
+        bam=join("misasim", "alignment", "hg002v1.1_hifi_revio_pbmay24.pri.bam"),
+        bed=join("misasim", "region.bed")
+    output:
+        bam=join("results", "misasim", "hg002v1.1_chr10_cen.bam"),
+        bam_idx=join("results", "misasim", "hg002v1.1_chr10_cen.bam.bai"),
+    conda:
+        "env.yaml"
+    log:
+        "logs/misasim/extract_aln_regions.log"
+    shell:
+        """
+        samtools view -L {input.bed} {input.bam} -bh -o {output.bam} 2> {log}
+        samtools index {output.bam} 2> {log}
+        """
+
+
+rule extract_read_names:
+    input:
+        rules.extract_aln_regions.output.bam
+    output:
+        join("results", "misasim", "cen_reads.txt")
+    conda:
+        "env.yaml"
+    shell:
+        """
+        samtools view {input} | cut -f 1 | sort | uniq > {output}
+        """
+
+
+rule extract_reads:
+    input:
+        reads_list=rules.extract_read_names.output,
+        reads=GLOB_HIFI
+    output:
+        join("results", "misasim", "cen", "{fname}.fastq.gz")
+    conda:
+        "env.yaml"
+    log:
+        "logs/misasim/extract_reads_{fname}.log"
+    shell:
+        """
+        seqtk subseq {input.reads} {input.reads_list} | bgzip > {output} 2> {log}
+        """
+
+
+configfile: "misasim/config_nucflag_negative_ctrl.yaml"
+
+module NucFlag:
+    snakefile:
+        "Snakemake-NucFlag/workflow/Snakefile"    
+    config:
+        config
+
+use rule * from NucFlag
+
+
+rule all:
+    input:
+        expand(rules.extract_reads.output, fname=HIFI_FNAMES),
+        rules.nucflag.input
+    default_target: True

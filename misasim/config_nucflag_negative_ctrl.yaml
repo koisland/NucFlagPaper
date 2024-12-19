@@ -1,0 +1,19 @@
+
+samples:
+  - name: "HG002_cen10"
+    asm_fa: HG002/assembly/hg002v1.1.fasta.gz
+    read_dir: "results/misasim/cen"
+    read_ext: "fastq.gz"
+    config: "misasim/nucflag.toml"
+    region_bed: "misasim/region.bed"
+
+output_dir: "results/nucflag_misasim"
+output_coverage: false
+tmp_dir: "/tmp"
+logs_dir: "logs/nucflag_misasim"
+benchmarks_dir: "benchmarks/nucflag_misasim"
+threads_aln: 8
+mem_aln: 30G
+processes_nucflag: 12
+mem_nucflag: 50G
+samtools_view_flag: 2308
