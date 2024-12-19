@@ -1,0 +1,4 @@
+HG002_genome_assembly	assembly	https://s3-us-west-2.amazonaws.com/human-pangenomics/T2T/HG002/assemblies/hg002v1.1.fasta.gz
+HG002_hifi_reads	hifi	https://s3-us-west-2.amazonaws.com/human-pangenomics/T2T/scratch/HG002/sequencing/hifirevio/m84005_220827_014912_s1.hifi_reads.fastq.gz
+HG002_hifi_reads	hifi	https://s3-us-west-2.amazonaws.com/human-pangenomics/T2T/scratch/HG002/sequencing/hifirevio/m84011_220902_175841_s1.hifi_reads.fastq.gz
+HG002_hifi_reads	hifi	https://s3-us-west-2.amazonaws.com/human-pangenomics/T2T/scratch/HG002/sequencing/hifirevio/m84039_230418_213342_s3.hifi_reads.default.fastq.gz
