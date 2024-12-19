@@ -1,0 +1,9 @@
+[submodule "HG002/Snakemake-NucFlag"]
+	path = HG002/Snakemake-NucFlag
+	url = https://github.com/logsdon-lab/Snakemake-NucFlag
+[submodule "Col-XJTU/Snakemake-NucFlag"]
+	path = Col-XJTU/Snakemake-NucFlag
+	url = https://github.com/logsdon-lab/Snakemake-NucFlag
+[submodule "Flagger/Snakemake-Flagger"]
+	path = Flagger/Snakemake-Flagger
+	url = https://github.com/koisland/Snakemake-Flagger.git
