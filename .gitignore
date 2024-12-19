@@ -1,0 +1,5 @@
+logs/
+.snakemake/
+hifi
+assembly
+*.done
