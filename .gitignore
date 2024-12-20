@@ -1,7 +1,10 @@
-logs/
-.snakemake/
 hifi
 assembly
 alignment
+
+.snakemake/
 results/
+benchmarks/
+logs/
+
 *.done

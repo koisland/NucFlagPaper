@@ -1,8 +1,8 @@
 
 samples:
-  - name: "HG002_cen10"
-    asm_fa: HG002/assembly/hg002v1.1.fasta.gz
-    read_dir: "results/misasim/cen"
+  - name: "HG002"
+    asm_fa: HG002/assembly/hg002v1.1.fasta
+    read_dir: "HG002/hifi"
     read_ext: "fastq.gz"
     config: "misasim/nucflag.toml"
     region_bed: "misasim/region.bed"

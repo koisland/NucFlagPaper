@@ -1,3 +1,4 @@
+from copy import deepcopy
 from os.path import join
 
 HIFI_DIR = join("HG002", "hifi")
@@ -5,9 +6,20 @@ GLOB_HIFI = join(HIFI_DIR, "{fname}.fastq.gz")
 HIFI_FNAMES = glob_wildcards(GLOB_HIFI).fname
 
 
+configfile: "misasim/config_nucflag_negative_ctrl.yaml"
+
+module NucFlag:
+    snakefile:
+        "Snakemake-NucFlag/workflow/Snakefile"    
+    config:
+        config
+
+use rule * from NucFlag
+
+
 rule extract_aln_regions:
     input:
-        bam=join("misasim", "alignment", "hg002v1.1_hifi_revio_pbmay24.pri.bam"),
+        bam=expand("results/nucflag_misasim/{sm}_hifi.bam", sm=["HG002"]),
         bed=join("misasim", "region.bed")
     output:
         bam=join("results", "misasim", "hg002v1.1_chr10_cen.bam"),
@@ -52,19 +64,22 @@ rule extract_reads:
         """
 
 
-configfile: "misasim/config_nucflag_negative_ctrl.yaml"
+CFG_SUBSET = deepcopy(config)
+CFG_SUBSET["samples"][0]["name"] = "HG002_subset"
+CFG_SUBSET["samples"][0]["read_dir"] = os.path.dirname(rules.extract_reads.output[0])
 
-module NucFlag:
+module NucFlagSubset:
     snakefile:
         "Snakemake-NucFlag/workflow/Snakefile"    
     config:
-        config
+        CFG_SUBSET
 
-use rule * from NucFlag
+use rule * from NucFlagSubset as subset_*
 
 
 rule all:
     input:
         expand(rules.extract_reads.output, fname=HIFI_FNAMES),
-        rules.nucflag.input
+        rules.nucflag.input,
+        rules.subset_nucflag.input,
     default_target: True
