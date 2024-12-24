@@ -10,3 +10,6 @@
 [submodule "misasim/Snakemake-NucFlag"]
 	path = misasim/Snakemake-NucFlag
 	url = https://github.com/logsdon-lab/Snakemake-NucFlag
+[submodule "misasim/misasim"]
+	path = misasim/misasim
+	url = https://github.com/logsdon-lab/misasim.git

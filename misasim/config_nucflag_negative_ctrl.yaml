@@ -3,13 +3,12 @@ samples:
   - name: "HG002"
     asm_fa: HG002/assembly/hg002v1.1.fasta
     read_dir: "HG002/hifi"
-    read_ext: "fastq.gz"
+    read_rgx: ".*\\.fastq.gz$"
     config: "misasim/nucflag.toml"
     region_bed: "misasim/region.bed"
 
 output_dir: "results/nucflag_misasim"
 output_coverage: false
-tmp_dir: "/tmp"
 logs_dir: "logs/nucflag_misasim"
 benchmarks_dir: "benchmarks/nucflag_misasim"
 threads_aln: 8

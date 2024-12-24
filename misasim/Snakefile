@@ -6,6 +6,7 @@ GLOB_HIFI = join(HIFI_DIR, "{fname}.fastq.gz")
 HIFI_FNAMES = glob_wildcards(GLOB_HIFI).fname
 
 
+# Run NucFlag on original assembly on original reads.
 configfile: "misasim/config_nucflag_negative_ctrl.yaml"
 
 module NucFlag:
@@ -17,6 +18,7 @@ module NucFlag:
 use rule * from NucFlag
 
 
+# Extract alignments restricted to region.bed
 rule extract_aln_regions:
     input:
         bam=expand("results/nucflag_misasim/{sm}_hifi.bam", sm=["HG002"]),
@@ -48,12 +50,13 @@ rule extract_read_names:
         """
 
 
+# Speed up alignment by subsetting reads to region.
 rule extract_reads:
     input:
         reads_list=rules.extract_read_names.output,
         reads=GLOB_HIFI
     output:
-        join("results", "misasim", "cen", "{fname}.fastq.gz")
+        join("results", "misasim", "reads", "{fname}.fastq.gz")
     conda:
         "env.yaml"
     log:
@@ -77,9 +80,118 @@ module NucFlagSubset:
 use rule * from NucFlagSubset as subset_*
 
 
+rule extract_hg002_chr10_cens:
+    input:
+        asm=CFG_SUBSET["samples"][0]["asm_fa"],
+        bed=join("misasim", "region.bed"),
+    output:
+        fa=join("results", "misasim", "asm", "HG002_chr10_cens.fa"),
+        fai=join("results", "misasim", "asm", "HG002_chr10_cens.fa.fai"),
+    log:
+        "logs/misasim/extract_HG002_chr10_cens.log"
+    conda:
+        "env.yaml"
+    shell:
+        """
+        seqtk subseq {input.asm} {input.bed} > {output.fa} 2> {log}
+        samtools faidx {output.fa} 2>> {log}
+        """
+
+rule compile_misasim:
+    input:
+        src="misasim/misasim",
+    output:
+        outbin=join(
+            "results", "misasim", "release", "misasim"
+        ),
+    params:
+        output_dir=lambda wc, output: os.path.dirname(os.path.dirname(str(output))),
+    conda:
+        "env.yaml"
+    log:
+        "logs/patch/compile_misasim.log",
+    shell:
+        """
+        log_file=$(realpath {log})
+        output_dir=$(realpath {params.output_dir})
+        cd {input}
+        cargo build --release --target-dir ${{output_dir}} &> ${{log_file}}
+        """
+
+
+NUM = list(range(1, 6))
+LEN = [i * 100_000 for i in range(1, 11)]
+MTYPES = ["misjoin", "false-duplication", "gap", "break"]
+ALL_MTYPES = [(mtype, num, l) for mtype in MTYPES for num in NUM for l in LEN]
+ALL_MTYPES_SEEDED = dict(zip(range(len(ALL_MTYPES)), ALL_MTYPES))
+
+
+rule write_misasim_types:
+    output:
+        fa=join("results", "misasim", "simulated", "params.tsv"),
+    run:
+        with open(str(output), "wt") as fh:
+            print("seed\tmtype\tnum\tmax_length", file=fh)
+            for seed, (mtype, num, length) in ALL_MTYPES_SEEDED.items():
+                print(f"{seed}\t{mtype}\t{num}\t{length}", file=fh)
+
+
+rule generate_misassemblies:
+    input:
+        bn=rules.compile_misasim.output,
+        fa=rules.extract_hg002_chr10_cens.output.fa
+    output:
+        fa=join("results", "misasim", "simulated", "{seed}.fa"),
+        bed=join("results", "misasim", "simulated", "{seed}.bed")
+    params:
+        mtype=lambda wc: ALL_MTYPES_SEEDED[int(wc.seed)][0],
+        num=lambda wc: ALL_MTYPES_SEEDED[int(wc.seed)][1],
+        length=lambda wc: ALL_MTYPES_SEEDED[int(wc.seed)][2]
+    log:
+        "logs/patch/generate_misassemblies{seed}.log",
+    shell:
+        """
+        {input.bn} {params.mtype} \
+        -n {params.num} \
+        -l {params.length} \
+        -s {wildcards.seed} \
+        -i {input.fa} \
+        -o {output.fa} \
+        -b {output.bed} 2> {log}
+        """
+
+
+CFG_MISASIM = deepcopy(config)
+CFG_MISASIM["samples"] = [
+    {
+        "name": f"HG002_{mtype}_{num}_{length}",
+        "asm_fa": expand(rules.generate_misassemblies.output, seed=seed)[0],
+        "read_dir": os.path.dirname(rules.extract_reads.output[0]),
+        "read_rgx": r".*\.fastq.gz$",
+        "config": "misasim/nucflag.toml"
+    }
+    for seed, (mtype, num, length) in ALL_MTYPES_SEEDED.items()
+]
+
+
+module NucFlagSubsetMisasim:
+    snakefile:
+        "Snakemake-NucFlag/workflow/Snakefile"    
+    config:
+        CFG_MISASIM
+
+use rule * from NucFlagSubsetMisasim as misasim_*
+
+
+# TODO: Calculate precision and recall
+
 rule all:
     input:
         expand(rules.extract_reads.output, fname=HIFI_FNAMES),
         rules.nucflag.input,
         rules.subset_nucflag.input,
+        rules.extract_hg002_chr10_cens.output,
+        expand(rules.generate_misassemblies.output, seed=ALL_MTYPES_SEEDED.keys()),
+        rules.misasim_nucflag.input,
+        rules.write_misasim_types.output,
     default_target: True

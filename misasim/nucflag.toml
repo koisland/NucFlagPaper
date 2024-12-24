@@ -34,4 +34,4 @@ thr_het_ratio = 0.2
 
 [general]
 # Window size. Only applicable if no region bed file is provided.
-window_size = 5_000_000
+window_size = 7_000_000
