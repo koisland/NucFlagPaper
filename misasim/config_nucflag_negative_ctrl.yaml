@@ -11,8 +11,8 @@ output_dir: "results/nucflag_misasim"
 output_coverage: false
 logs_dir: "logs/nucflag_misasim"
 benchmarks_dir: "benchmarks/nucflag_misasim"
-threads_aln: 8
-mem_aln: 30G
-processes_nucflag: 12
+threads_aln: 24
+mem_aln: 50G
+processes_nucflag: 24
 mem_nucflag: 50G
 samtools_view_flag: 2308
