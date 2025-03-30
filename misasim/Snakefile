@@ -1,14 +1,73 @@
 from copy import deepcopy
 from os.path import join
 
+ASM_FA = "HG002/assembly/hg002v1.1.fasta"
 HIFI_DIR = join("HG002", "hifi")
 GLOB_HIFI = join(HIFI_DIR, "{fname}.fastq.gz")
 HIFI_FNAMES = glob_wildcards(GLOB_HIFI).fname
 
+DOWNSAMPLE_PERC = [0.50, 0.33]
+
+NUM = list(range(1, config.get("max_num", 3)))
+LEN = config.get(
+    "lengths",
+    [10, 500, 1_000, 10_000, 50_000]
+)
+MTYPES = config.get(
+    "mtype",
+    ["misjoin", "false-duplication", "gap", "inversion"]
+)
+ALL_MTYPES = []
+for mtype in MTYPES:
+    if mtype == "break":
+        lengths = [1]
+    else:
+        lengths = LEN
+    for num in NUM:
+        for l in lengths:
+            ALL_MTYPES.append((mtype, num, l))
+
+ALL_MTYPES_SEEDED = dict(zip(range(len(ALL_MTYPES)), ALL_MTYPES))
 
 # Run NucFlag on original assembly on original reads.
 configfile: "misasim/config_nucflag_negative_ctrl.yaml"
 
+
+# Subset
+# Normal
+config["samples"].append(
+    {
+        "name": f"HG002-subset",
+        "asm_fa": join("results", "misasim", "asm", "HG002_chr10_cens.fa"),
+        "reads": expand(join("results", "misasim", "reads", "{fname}.fastq.gz"), fname=HIFI_FNAMES),
+        "config": "misasim/nucflag.toml"
+    }
+)
+# Downsampled.
+config["samples"].extend(
+    [
+        {
+            "name": f"HG002-subset-{perc}",
+            "asm_fa": join("results", "misasim", "asm", "HG002_chr10_cens.fa"),
+            "reads": expand(join("results", "misasim", "reads", "{fname}-{perc}.fastq.gz"), fname=HIFI_FNAMES, perc=perc),
+            "config": "misasim/nucflag.toml"
+        }
+        for perc in DOWNSAMPLE_PERC
+    ]
+)
+# Misassemblies
+config["samples"].extend(
+    [
+        {
+            "name": f"HG002-{perc}-{mtype}-{num}-{length}",
+            "asm_fa": expand(join("results", "misasim", "simulated", "{seed}.fa"), seed=seed)[0],
+            "reads": expand(join("results", "misasim", "reads", "{fname}-{perc}.fastq.gz"), fname=HIFI_FNAMES, perc=perc),
+            "config": "misasim/nucflag.toml"
+        }
+        for perc in DOWNSAMPLE_PERC
+        for seed, (mtype, num, length) in ALL_MTYPES_SEEDED.items()
+    ]
+)
 module NucFlag:
     snakefile:
         "Snakemake-NucFlag/workflow/Snakefile"    
@@ -18,10 +77,44 @@ module NucFlag:
 use rule * from NucFlag
 
 
+rule split_asm:
+    input:
+        fa=ASM_FA,
+        fai=f"{ASM_FA}.fai",
+    output:
+        join("results", "flagger", "seq", "HG002_{hap}.fa")
+    conda:
+        "env.yaml"
+    shell:
+        """
+        seqtk subseq {input.fa} <(grep {wildcards.hap} {input.fai} | cut -f 1) > {output}
+        """
+
+
+module Flagger:
+    snakefile:
+        "flagger.smk"    
+    config:
+        {
+            "output_dir": join("results", "flagger", "original"),
+            "samples": [
+                {
+                    "sm_id": "HG002_original",
+                    "asm_1": expand(rules.split_asm.output, hap="MATERNAL")[0],
+                    "asm_2": expand(rules.split_asm.output, hap="PATERNAL")[0],
+                    "alpha": "flagger/misc/alpha_tsv/HiFi_DC_1.2/alpha_optimum_trunc_exp_gaussian_w_16000_n_50.HiFi_DC_1.2_DEC_2024.v1.1.0.tsv",
+                    "reads": expand(GLOB_HIFI, fname=HIFI_FNAMES),
+                }
+            ]
+        }
+
+use rule * from Flagger
+
+
 # Extract alignments restricted to region.bed
 rule extract_aln_regions:
     input:
-        bam=expand("results/nucflag_misasim/{sm}_hifi.bam", sm=["HG002"]),
+        bam=expand(join(config["output_dir"], "{sm}.bam"), sm=["HG002"]),
         bed=join("misasim", "region.bed")
     output:
         bam=join("results", "misasim", "hg002v1.1_chr10_cen.bam"),
@@ -67,22 +160,26 @@ rule extract_reads:
         """
 
 
-CFG_SUBSET = deepcopy(config)
-CFG_SUBSET["samples"][0]["name"] = "HG002_subset"
-CFG_SUBSET["samples"][0]["read_dir"] = os.path.dirname(rules.extract_reads.output[0])
-
-module NucFlagSubset:
-    snakefile:
-        "Snakemake-NucFlag/workflow/Snakefile"    
-    config:
-        CFG_SUBSET
-
-use rule * from NucFlagSubset as subset_*
-
+# Downsample reads by 100%, 75%, 50%
+rule downsample_reads:
+    input:
+        rules.extract_reads.output
+    output:
+        join("results", "misasim", "reads", "{fname}-{perc}.fastq.gz")
+    params:
+        sample="{perc}"
+    conda:
+        "env.yaml"
+    log:
+        "logs/misasim/downsample_reads_{fname}_{perc}.log"
+    shell:
+        """
+        seqtk sample {input} {params.sample} | bgzip > {output}
+        """
 
 rule extract_hg002_chr10_cens:
     input:
-        asm=CFG_SUBSET["samples"][0]["asm_fa"],
+        asm=config["samples"][0]["asm_fa"],
         bed=join("misasim", "region.bed"),
     output:
         fa=join("results", "misasim", "asm", "HG002_chr10_cens.fa"),
@@ -97,106 +194,59 @@ rule extract_hg002_chr10_cens:
         samtools faidx {output.fa} 2>> {log}
         """
 
-rule compile_misasim:
-    input:
-        src="misasim/misasim",
-    output:
-        outbin=join(
-            "results", "misasim", "release", "misasim"
-        ),
-    params:
-        output_dir=lambda wc, output: os.path.dirname(os.path.dirname(str(output))),
-    conda:
-        "env.yaml"
-    log:
-        "logs/patch/compile_misasim.log",
-    shell:
-        """
-        log_file=$(realpath {log})
-        output_dir=$(realpath {params.output_dir})
-        cd {input}
-        cargo build --release --target-dir ${{output_dir}} &> ${{log_file}}
-        """
-
-
-NUM = list(range(1, 3))
-LEN = [i * 100_000 for i in range(1, 11)]
-MTYPES = ["misjoin", "false-duplication", "gap", "break"]
-ALL_MTYPES = [(mtype, num, l) for mtype in MTYPES for num in NUM for l in LEN]
-ALL_MTYPES_SEEDED = dict(zip(range(len(ALL_MTYPES)), ALL_MTYPES))
-
-
-rule write_misasim_types:
-    output:
-        fa=join("results", "misasim", "simulated", "params.tsv"),
-    run:
-        with open(str(output), "wt") as fh:
-            print("seed\tmtype\tnum\tmax_length", file=fh)
-            for seed, (mtype, num, length) in ALL_MTYPES_SEEDED.items():
-                print(f"{seed}\t{mtype}\t{num}\t{length}", file=fh)
-
-
-rule generate_misassemblies:
-    input:
-        bn=rules.compile_misasim.output,
-        fa=rules.extract_hg002_chr10_cens.output.fa
-    output:
-        fa=join("results", "misasim", "simulated", "{seed}.fa"),
-        bed=join("results", "misasim", "simulated", "{seed}.bed")
-    params:
-        mtype=lambda wc: ALL_MTYPES_SEEDED[int(wc.seed)][0],
-        num=lambda wc: ALL_MTYPES_SEEDED[int(wc.seed)][1],
-        length_arg=lambda wc: (
-            f"-l {ALL_MTYPES_SEEDED[int(wc.seed)][2]}"
-            if ALL_MTYPES_SEEDED[int(wc.seed)][0] != "break"
-            else
-            ""
-        )
-    log:
-        "logs/patch/generate_misassemblies_{seed}.log",
-    shell:
-        """
-        {input.bn} {params.mtype} \
-        -n {params.num} \
-        {params.length_arg} \
-        -s {wildcards.seed} \
-        -i {input.fa} \
-        -o {output.fa} \
-        -b {output.bed} 2> {log}
-        """
-
-
-CFG_MISASIM = deepcopy(config)
-CFG_MISASIM["samples"] = [
-    {
-        "name": f"HG002_{mtype}_{num}_{length}",
-        "asm_fa": expand(rules.generate_misassemblies.output, seed=seed)[0],
-        "read_dir": os.path.dirname(rules.extract_reads.output[0]),
-        "read_rgx": r".*\.fastq.gz$",
-        "config": "misasim/nucflag.toml"
-    }
-    for seed, (mtype, num, length) in ALL_MTYPES_SEEDED.items()
-]
-
-
-module NucFlagSubsetMisasim:
+# Generate misassemblies
+module misasim:
     snakefile:
-        "Snakemake-NucFlag/workflow/Snakefile"    
+        "misasim.smk"    
     config:
-        CFG_MISASIM
+        {
+            "fa": rules.extract_hg002_chr10_cens.output.fa,
+            "seed_opts": ALL_MTYPES_SEEDED
+        }
 
-use rule * from NucFlagSubsetMisasim as misasim_*
+use rule * from misasim
 
 
-# TODO: Calculate precision and recall
+FLAGGER_CFG = {
+    "output_dir": join("results", "flagger", "simulated"),
+    "samples": [
+        {
+            "sm_id": f"HG002_misasim_{perc}_{mtype}_{num}_{length}",
+            "asm_1": expand(rules.split_asm_misasim.output, seed=seed, hap="MATERNAL")[0],
+            "asm_2": expand(rules.split_asm_misasim.output, seed=seed, hap="PATERNAL")[0],
+            "alpha": "flagger/misc/alpha_tsv/HiFi_DC_1.2/alpha_optimum_trunc_exp_gaussian_w_16000_n_50.HiFi_DC_1.2_DEC_2024.v1.1.0.tsv",
+            "reads": expand(rules.downsample_reads.output, fname=HIFI_FNAMES, perc=perc),
+        }
+        for perc in DOWNSAMPLE_PERC
+        for seed, (mtype, num, length) in ALL_MTYPES_SEEDED.items()
+    ]
+}
+
+module FlaggerSubsetMisasim:
+    snakefile:
+        "flagger.smk"
+    config:
+        FLAGGER_CFG
+
+use rule * from FlaggerSubsetMisasim as misasim_*
+
+
+# TODO: Test minimap2 lr:hqae, winnowmap map-ont, pbmm2 CCS, pbmm2 SUBREAD. First 10 seeds.
+# TODO: Calculate precision and recall on all n seeds.
 
 rule all:
     input:
-        expand(rules.extract_reads.output, fname=HIFI_FNAMES),
+        # Original.
         rules.nucflag.input,
-        rules.subset_nucflag.input,
+        # rules.flagger.input,
+
+        # Subset to centromere
         rules.extract_hg002_chr10_cens.output,
-        expand(rules.generate_misassemblies.output, seed=ALL_MTYPES_SEEDED.keys()),
-        rules.misasim_nucflag.input,
-        rules.write_misasim_types.output,
+        
+        # Misassembly
+        expand(rules.downsample_reads.output, fname=HIFI_FNAMES, perc=DOWNSAMPLE_PERC),
+        rules.misasim_all.input,
+        
+        # rules.misasim_flagger.input
+
     default_target: True
