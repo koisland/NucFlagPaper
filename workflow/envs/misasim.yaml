@@ -4,7 +4,6 @@ channels:
 dependencies:
   - samtools
   - seqtk
-  - rust
   - python==3.12
   - pip
   - pip:

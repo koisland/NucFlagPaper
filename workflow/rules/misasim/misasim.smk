@@ -74,7 +74,7 @@ rule generate_misassemblies:
 
 rule split_asm_misasim:
     input:
-        fa=rules.generate_misassemblies.output,
+        fa=rules.generate_misassemblies.output.fa,
     output:
         join("results", "misasim", "simulated", "{seed}_{hap}.fa")
     conda:
@@ -89,5 +89,6 @@ rule misasim_all:
     input:
         # Then generate misassemblies and check them with nucflag and flagger.
         expand(rules.generate_misassemblies.output, seed=SEED_OPTS.keys()),
+        rules.write_misasim_types.output,
         expand(rules.split_asm_misasim.output, seed=SEED_OPTS.keys(), hap=HAPS),
     default_target: True

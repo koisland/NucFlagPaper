@@ -29,6 +29,8 @@ for mtype in MTYPES:
 
 ALL_MTYPES_SEEDED = dict(zip(range(len(ALL_MTYPES)), ALL_MTYPES))
 
+# with open()
+
 # Run NucFlag on original assembly on original reads.
 configfile: "misasim/config_nucflag_negative_ctrl.yaml"
 
@@ -53,6 +55,18 @@ config["samples"].extend(
             "config": "misasim/nucflag.toml"
         }
         for perc in DOWNSAMPLE_PERC
+    ]
+)
+# Misassemblies
+config["samples"].extend(
+    [
+        {
+            "name": f"HG002-{mtype}-{num}-{length}",
+            "asm_fa": expand(join("results", "misasim", "simulated", "{seed}.fa"), seed=seed)[0],
+            "reads": expand(join("results", "misasim", "reads", "{fname}.fastq.gz"), fname=HIFI_FNAMES),
+            "config": "misasim/nucflag.toml"
+        }
+        for seed, (mtype, num, length) in ALL_MTYPES_SEEDED.items()
     ]
 )
 # Misassemblies
@@ -119,13 +133,17 @@ rule extract_aln_regions:
     output:
         bam=join("results", "misasim", "hg002v1.1_chr10_cen.bam"),
         bam_idx=join("results", "misasim", "hg002v1.1_chr10_cen.bam.bai"),
+    params:
+        extend_region=500_000
     conda:
         "env.yaml"
     log:
         "logs/misasim/extract_aln_regions.log"
     shell:
         """
-        samtools view -L {input.bed} {input.bam} -bh -o {output.bam} 2> {log}
+        samtools view -L \
+            <(awk '{{ print $1, $2-{params.extend_region}, $3+{params.extend_region}}}' \
+            {input.bed}) {input.bam} -bh -o {output.bam} 2> {log}
         samtools index {output.bam} 2> {log}
         """
 
