@@ -1,6 +1,7 @@
 [submodule "misasim/Snakemake-NucFlag"]
 	path = workflow/rules/misasim/Snakemake-NucFlag
 	url = https://github.com/logsdon-lab/Snakemake-NucFlag
+	branch = "feature/nucflag-v1.0"
 	ignore = "dirty"
 [submodule "misasim/misasim"]
 	path = workflow/rules/misasim/misasim
