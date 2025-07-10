@@ -1,0 +1,8 @@
+
+data_manifest: "config/manifest.tsv"
+data_dir: "data"
+output_dir: "results/misasim"
+logs_dir: "logs/misasim"
+benchmarks_dir: "benchmarks/misasim"
+regions:
+  HG002: config/HG002.bed

@@ -1,3 +1,5 @@
+A_thaliana	assembly	https://download.cncb.ac.cn/gwh/Plants/Arabidopsis_thaliana_AT_GWHBDNP00000000.1/GWHBDNP00000000.1.genome.fasta.gz
+A_thaliana	hifi	https://download.cncb.ac.cn/gsa/CRA004538/CRR302668/CRR302668.fastq.gz
 HG002	assembly	s3://human-pangenomics/T2T/HG002/assemblies/hg002v1.1.fasta.gz
 HG002	hifi	s3://human-pangenomics/T2T/scratch/HG002/sequencing/hifirevio/m84005_220827_014912_s1.hifi_reads.fastq.gz
 HG002	hifi	s3://human-pangenomics/T2T/scratch/HG002/sequencing/hifirevio/m84011_220902_175841_s1.hifi_reads.fastq.gz

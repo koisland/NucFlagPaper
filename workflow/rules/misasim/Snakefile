@@ -1,22 +1,57 @@
 from copy import deepcopy
 from os.path import join
+from collections import defaultdict
 
-ASM_FA = "HG002/assembly/hg002v1.1.fasta"
-HIFI_DIR = join("HG002", "hifi")
-GLOB_HIFI = join(HIFI_DIR, "{fname}.fastq.gz")
-HIFI_FNAMES = glob_wildcards(GLOB_HIFI).fname
 
+"""
+{
+    Literal["output_dir"]: str,
+    Literal["logs_dir"]: str,
+    Literal["benchmarks_dir"]: str,
+    Literal["samples"]: {
+        str: {
+            Literal["asm_fa"]: str,
+            Literal["bed"]: str,
+            Literal["reads"]: list[str],
+            Literal["preset"]: str
+        }
+    }
+}
+"""
+SAMPLES = config["samples"]
+
+OUTPUT_DIR = config["output_dir"]
+NUCFLAG_OUTPUT_DIR = join(OUTPUT_DIR, "nucflag")
+MISASIM_OUTPUT_DIR = join(OUTPUT_DIR, "simulated")
+
+LOG_DIR = config["logs_dir"]
+NUCFLAG_LOG_DIR = join(LOG_DIR, "nucflag")
+MISASIM_LOG_DIR = join(LOG_DIR, "simulated")
+
+BENCHMARK_DIR = config["benchmarks_dir"]
+NUCFLAG_BENCHMARK_DIR = join(BENCHMARK_DIR, "nucflag")
+MISASIM_BENCHMARK_DIR = join(BENCHMARK_DIR, "simulated")
+
+SLOP_REGION = 500_000
 DOWNSAMPLE_PERC = [0.50, 0.33]
 
+SAMPLE_REGIONS = defaultdict(list)
+for sample, cfg in SAMPLES.items():
+    bedfile = cfg["bed"]
+    with open(bedfile) as fh:
+        for line in fh:
+            contig, start, end, *_ = line.strip().split("\t")
+            SAMPLE_REGIONS[sample].append(f"{contig}~{start}~{end}")
+
+
+wildcard_constraints:
+    sm="|".join(SAMPLE_REGIONS.keys()),
+    region="|".join(rgn for rgns in SAMPLE_REGIONS.values() for rgn in rgns),
+
+
 NUM = list(range(1, config.get("max_num", 3)))
-LEN = config.get(
-    "lengths",
-    [10, 500, 1_000, 10_000, 50_000]
-)
-MTYPES = config.get(
-    "mtype",
-    ["misjoin", "false-duplication", "gap", "inversion"]
-)
+LEN = config.get("lengths", [10, 500, 1_000, 10_000, 50_000])
+MTYPES = config.get("mtype", ["misjoin", "false-duplication", "gap", "inversion"])
 ALL_MTYPES = []
 for mtype in MTYPES:
     if mtype == "break":
@@ -29,132 +64,53 @@ for mtype in MTYPES:
 
 ALL_MTYPES_SEEDED = dict(zip(range(len(ALL_MTYPES)), ALL_MTYPES))
 
-# with open()
-
 # Run NucFlag on original assembly on original reads.
-configfile: "misasim/config_nucflag_negative_ctrl.yaml"
-
-
-# Subset
-# Normal
-config["samples"].append(
-    {
-        "name": f"HG002-subset",
-        "asm_fa": join("results", "misasim", "asm", "HG002_chr10_cens.fa"),
-        "reads": expand(join("results", "misasim", "reads", "{fname}.fastq.gz"), fname=HIFI_FNAMES),
-        "config": "misasim/nucflag.toml"
-    }
-)
-# Downsampled.
-config["samples"].extend(
-    [
-        {
-            "name": f"HG002-subset-{perc}",
-            "asm_fa": join("results", "misasim", "asm", "HG002_chr10_cens.fa"),
-            "reads": expand(join("results", "misasim", "reads", "{fname}-{perc}.fastq.gz"), fname=HIFI_FNAMES, perc=perc),
-            "config": "misasim/nucflag.toml"
-        }
-        for perc in DOWNSAMPLE_PERC
-    ]
-)
-# Misassemblies
-config["samples"].extend(
-    [
-        {
-            "name": f"HG002-{mtype}-{num}-{length}",
-            "asm_fa": expand(join("results", "misasim", "simulated", "{seed}.fa"), seed=seed)[0],
-            "reads": expand(join("results", "misasim", "reads", "{fname}.fastq.gz"), fname=HIFI_FNAMES),
-            "config": "misasim/nucflag.toml"
-        }
-        for seed, (mtype, num, length) in ALL_MTYPES_SEEDED.items()
-    ]
-)
-# Misassemblies
-config["samples"].extend(
-    [
-        {
-            "name": f"HG002-{perc}-{mtype}-{num}-{length}",
-            "asm_fa": expand(join("results", "misasim", "simulated", "{seed}.fa"), seed=seed)[0],
-            "reads": expand(join("results", "misasim", "reads", "{fname}-{perc}.fastq.gz"), fname=HIFI_FNAMES, perc=perc),
-            "config": "misasim/nucflag.toml"
-        }
-        for perc in DOWNSAMPLE_PERC
-        for seed, (mtype, num, length) in ALL_MTYPES_SEEDED.items()
-    ]
-)
-module NucFlag:
-    snakefile:
-        "Snakemake-NucFlag/workflow/Snakefile"    
-    config:
-        config
-
-use rule * from NucFlag
-
-
-rule split_asm:
-    input:
-        fa=ASM_FA,
-        fai=f"{ASM_FA}.fai",
-    output:
-        join("results", "flagger", "seq", "HG002_{hap}.fa")
-    conda:
-        "env.yaml"
-    shell:
-        """
-        seqtk subseq {input.fa} <(grep {wildcards.hap} {input.fai} | cut -f 1) > {output}
-        """
-
-
-module Flagger:
-    snakefile:
-        "flagger.smk"    
-    config:
-        {
-            "output_dir": join("results", "flagger", "original"),
-            "samples": [
-                {
-                    "sm_id": "HG002_original",
-                    "asm_1": expand(rules.split_asm.output, hap="MATERNAL")[0],
-                    "asm_2": expand(rules.split_asm.output, hap="PATERNAL")[0],
-                    "alpha": "flagger/misc/alpha_tsv/HiFi_DC_1.2/alpha_optimum_trunc_exp_gaussian_w_16000_n_50.HiFi_DC_1.2_DEC_2024.v1.1.0.tsv",
-                    "reads": expand(GLOB_HIFI, fname=HIFI_FNAMES),
-                }
-            ]
-        }
-
-use rule * from Flagger
+config_base = {
+    "samples": [{"name": sm, **cfg} for sm, cfg in SAMPLES.items()],
+    "output_dir": NUCFLAG_OUTPUT_DIR,
+    "output_pileup": False,
+    "logs_dir": NUCFLAG_LOG_DIR,
+    "benchmarks_dir": NUCFLAG_BENCHMARK_DIR,
+    "threads_aln": 24,
+    "mem_aln": "50G",
+    "processes_nucflag": 2,
+    "threads_nucflag": 2,
+    "mem_nucflag": "50G",
+    "samtools_view_flag": 2308,
+}
 
 
 # Extract alignments restricted to region.bed
 rule extract_aln_regions:
     input:
-        bam=expand(join(config["output_dir"], "{sm}.bam"), sm=["HG002"]),
-        bed=join("misasim", "region.bed")
+        # NucFlag BAM of whole assembly
+        bam=join(NUCFLAG_OUTPUT_DIR, "{sm}.bam"),
+        fa=lambda wc: SAMPLES[wc.sm]["asm_fa"],
     output:
-        bam=join("results", "misasim", "hg002v1.1_chr10_cen.bam"),
-        bam_idx=join("results", "misasim", "hg002v1.1_chr10_cen.bam.bai"),
+        bam=join(OUTPUT_DIR, "bam", "{sm}_{region}.bam"),
+        bam_idx=join(OUTPUT_DIR, "bam", "{sm}_{region}.bam.bai"),
     params:
-        extend_region=500_000
+        slop_region=SLOP_REGION,
     conda:
-        "env.yaml"
+        "../../envs/misasim.yaml"
     log:
-        "logs/misasim/extract_aln_regions.log"
+        join(LOG_DIR, "extract_aln_{sm}_{region}.log"),
     shell:
         """
+        samtools faidx {input.fa}
         samtools view -L \
-            <(awk '{{ print $1, $2-{params.extend_region}, $3+{params.extend_region}}}' \
-            {input.bed}) {input.bam} -bh -o {output.bam} 2> {log}
+            <(bedtools slop -i <(echo {wildcards.region} | sed 's/~/\\t/g') -g "{input.fa}.fai") {input.bam} -bh -o {output.bam} 2> {log}
         samtools index {output.bam} 2> {log}
         """
 
 
 rule extract_read_names:
     input:
-        rules.extract_aln_regions.output.bam
+        rules.extract_aln_regions.output.bam,
     output:
-        join("results", "misasim", "cen_reads.txt")
+        join(OUTPUT_DIR, "reads", "{sm}_{region}.txt"),
     conda:
-        "env.yaml"
+        "../../envs/misasim.yaml"
     shell:
         """
         samtools view {input} | cut -f 1 | sort | uniq > {output}
@@ -165,106 +121,216 @@ rule extract_read_names:
 rule extract_reads:
     input:
         reads_list=rules.extract_read_names.output,
-        reads=GLOB_HIFI
+        reads=lambda wc: SAMPLES[wc.sm]["reads"],
     output:
-        join("results", "misasim", "reads", "{fname}.fastq.gz")
+        join(OUTPUT_DIR, "reads", "{sm}_{region}.fastq.gz"),
     conda:
-        "env.yaml"
+        "../../envs/misasim.yaml"
     log:
-        "logs/misasim/extract_reads_{fname}.log"
+        join(LOG_DIR, "extract_reads_{sm}_{region}.log"),
     shell:
         """
-        seqtk subseq {input.reads} {input.reads_list} | bgzip > {output} 2> {log}
+        seqtk subseq <(zcat {input.reads}) {input.reads_list} | bgzip > {output} 2> {log}
         """
 
 
 # Downsample reads by 100%, 75%, 50%
 rule downsample_reads:
     input:
-        rules.extract_reads.output
+        rules.extract_reads.output,
     output:
-        join("results", "misasim", "reads", "{fname}-{perc}.fastq.gz")
+        join(OUTPUT_DIR, "reads", "{sm}_{region}-{perc}.fastq.gz"),
     params:
-        sample="{perc}"
+        sample="{perc}",
     conda:
-        "env.yaml"
+        "../../envs/misasim.yaml"
     log:
-        "logs/misasim/downsample_reads_{fname}_{perc}.log"
+        join(LOG_DIR, "downsample_reads_{sm}_{region}_{perc}.log"),
     shell:
         """
         seqtk sample {input} {params.sample} | bgzip > {output}
         """
 
-rule extract_hg002_chr10_cens:
+
+rule extract_fa_regions:
     input:
-        asm=config["samples"][0]["asm_fa"],
-        bed=join("misasim", "region.bed"),
+        asm=lambda wc: SAMPLES[wc.sm]["asm_fa"],
     output:
-        fa=join("results", "misasim", "asm", "HG002_chr10_cens.fa"),
-        fai=join("results", "misasim", "asm", "HG002_chr10_cens.fa.fai"),
+        fa=join(OUTPUT_DIR, "asm", "{sm}_{region}.fa"),
+        fai=join(OUTPUT_DIR, "asm", "{sm}_{region}.fa.fai"),
     log:
-        "logs/misasim/extract_HG002_chr10_cens.log"
+        join(LOG_DIR, "extract_{sm}_{region}.log"),
     conda:
-        "env.yaml"
+        "../../envs/misasim.yaml"
     shell:
         """
-        seqtk subseq {input.asm} {input.bed} > {output.fa} 2> {log}
+        seqtk subseq {input.asm} <(echo {wildcards.region} | sed 's/~/\\t/g') > {output.fa} 2> {log}
         samtools faidx {output.fa} 2>> {log}
         """
+
+
+# Subset
+# Normal
+config_base["samples"].extend(
+    (
+        {
+            "name": f"{sm}-{region}-subset",
+            "asm_fa": expand(rules.extract_fa_regions.output, sm=sm, region=region)[0],
+            "reads": expand(rules.extract_reads.output, sm=sm, region=region),
+            "preset": SAMPLES[sm]["preset"],
+        }
+        for sm, regions in SAMPLE_REGIONS.items()
+        for region in regions
+    )
+)
+# Downsampled.
+config_base["samples"].extend(
+    [
+        {
+            "name": f"{sm}-{region}-subset-{perc}",
+            "asm_fa": expand(rules.extract_fa_regions.output, sm=sm, region=region)[0],
+            "reads": expand(
+                rules.downsample_reads.output, sm=sm, region=region, perc=perc
+            ),
+            "preset": SAMPLES[sm]["preset"],
+        }
+        for sm, regions in SAMPLE_REGIONS.items()
+        for region in regions
+        for perc in DOWNSAMPLE_PERC
+    ]
+)
+
 
 # Generate misassemblies
 module misasim:
     snakefile:
-        "misasim.smk"    
+        "misasim.smk"
     config:
         {
-            "fa": rules.extract_hg002_chr10_cens.output.fa,
-            "seed_opts": ALL_MTYPES_SEEDED
+            "output_dir": MISASIM_OUTPUT_DIR,
+            "log_dir": MISASIM_LOG_DIR,
+            "samples": {
+                f"{sm}_{region}": {
+                    "fa": expand(rules.extract_fa_regions.output, sm=sm, region=region),
+                    "seed_opts": ALL_MTYPES_SEEDED,
+                }
+                for sm, regions in SAMPLE_REGIONS.items()
+                for region in regions
+            },
         }
 
-use rule * from misasim
+
+use rule * from misasim as ms_*
 
 
-FLAGGER_CFG = {
-    "output_dir": join("results", "flagger", "simulated"),
-    "samples": [
+# Misassemblies
+config_base["samples"].extend(
+    [
         {
-            "sm_id": f"HG002_misasim_{perc}_{mtype}_{num}_{length}",
-            "asm_1": expand(rules.split_asm_misasim.output, seed=seed, hap="MATERNAL")[0],
-            "asm_2": expand(rules.split_asm_misasim.output, seed=seed, hap="PATERNAL")[0],
-            "alpha": "flagger/misc/alpha_tsv/HiFi_DC_1.2/alpha_optimum_trunc_exp_gaussian_w_16000_n_50.HiFi_DC_1.2_DEC_2024.v1.1.0.tsv",
-            "reads": expand(rules.downsample_reads.output, fname=HIFI_FNAMES, perc=perc),
+            "name": f"{sm}_{rgn}-{mtype}-{num}-{length}",
+            "asm_fa": join(MISASIM_OUTPUT_DIR, f"{sm}_{rgn}", f"{seed}.fa"),
+            "reads": expand(rules.extract_reads.output, sm=sm, region=rgn),
+            "preset": SAMPLES[sm]["preset"],
         }
+        for sm, regions in SAMPLE_REGIONS.items()
+        for rgn in regions
+        for seed, (mtype, num, length) in ALL_MTYPES_SEEDED.items()
+    ]
+)
+# Misassemblies
+config_base["samples"].extend(
+    [
+        {
+            "name": f"{sm}_{rgn}-{perc}-{mtype}-{num}-{length}",
+            "asm_fa": join(MISASIM_OUTPUT_DIR, f"{sm}_{rgn}", f"{seed}.fa"),
+            "reads": expand(
+                rules.downsample_reads.output, sm=sm, region=rgn, perc=perc
+            ),
+            "preset": SAMPLES[sm]["preset"],
+        }
+        for sm, regions in SAMPLE_REGIONS.items()
+        for rgn in regions
         for perc in DOWNSAMPLE_PERC
         for seed, (mtype, num, length) in ALL_MTYPES_SEEDED.items()
     ]
-}
+)
 
-module FlaggerSubsetMisasim:
+
+# rule split_asm:
+#     input:
+#         fa=ASM_FA,
+#         fai=f"{ASM_FA}.fai",
+#     output:
+#         join("results", "flagger", "seq", f"{SAMPLE}_{{hap}}.fa")
+#     conda:
+#         "env.yaml"
+#     shell:
+#         """
+#         seqtk subseq {input.fa} <(grep {wildcards.hap} {input.fai} | cut -f 1) > {output}
+#         """
+
+
+# module Flagger:
+#     snakefile:
+#         "flagger.smk"
+#     config:
+#         {
+#             "output_dir": join("results", "flagger", "original", SAMPLE),
+#             "samples": [
+#                 {
+#                     "sm_id": f"{SAMPLE}_original",
+#                     "asm_1": expand(rules.split_asm.output, hap="MATERNAL")[0],
+#                     "asm_2": expand(rules.split_asm.output, hap="PATERNAL")[0],
+#                     "alpha": "flagger/misc/alpha_tsv/HiFi_DC_1.2/alpha_optimum_trunc_exp_gaussian_w_16000_n_50.HiFi_DC_1.2_DEC_2024.v1.1.0.tsv",
+#                     "reads": expand(GLOB_HIFI, fname=HIFI_FNAMES),
+#                 }
+#             ]
+#         }
+
+# use rule * from Flagger
+
+
+module NucFlag:
     snakefile:
-        "flagger.smk"
+        "Snakemake-NucFlag/workflow/Snakefile"
     config:
-        FLAGGER_CFG
+        config_base
 
-use rule * from FlaggerSubsetMisasim as misasim_*
+
+use rule * from NucFlag as nf_*
+
+
+# FLAGGER_CFG = {
+#     "output_dir": join("results", "flagger", "simulated"),
+#     "samples": [
+#         {
+#             "sm_id": f"HG002_misasim_{perc}_{mtype}_{num}_{length}",
+#             "asm_1": expand(rules.split_asm_misasim.output, seed=seed, hap="MATERNAL")[0],
+#             "asm_2": expand(rules.split_asm_misasim.output, seed=seed, hap="PATERNAL")[0],
+#             "alpha": "flagger/misc/alpha_tsv/HiFi_DC_1.2/alpha_optimum_trunc_exp_gaussian_w_16000_n_50.HiFi_DC_1.2_DEC_2024.v1.1.0.tsv",
+#             "reads": expand(rules.downsample_reads.output, fname=HIFI_FNAMES, perc=perc),
+#         }
+#         for perc in DOWNSAMPLE_PERC
+#         for seed, (mtype, num, length) in ALL_MTYPES_SEEDED.items()
+#     ]
+# }
+
+# module FlaggerSubsetMisasim:
+#     snakefile:
+#         "flagger.smk"
+#     config:
+#         FLAGGER_CFG
+
+# use rule * from FlaggerSubsetMisasim as misasim_*
 
 
 # TODO: Test minimap2 lr:hqae, winnowmap map-ont, pbmm2 CCS, pbmm2 SUBREAD. First 10 seeds.
 # TODO: Calculate precision and recall on all n seeds.
 
+
 rule all:
     input:
-        # Original.
-        rules.nucflag.input,
+        rules.nf_nucflag.input,
         # rules.flagger.input,
-
-        # Subset to centromere
-        rules.extract_hg002_chr10_cens.output,
-        
-        # Misassembly
-        expand(rules.downsample_reads.output, fname=HIFI_FNAMES, perc=DOWNSAMPLE_PERC),
-        rules.misasim_all.input,
-        
         # rules.misasim_flagger.input
-
     default_target: True

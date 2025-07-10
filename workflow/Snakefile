@@ -1,0 +1,9 @@
+include: "rules/common.smk"
+include: "rules/download_data.smk"
+include: "rules/simulate_misassemblies.smk"
+
+
+rule all:
+    input:
+        rules.download_all.input,
+        rules.sim_all.input,

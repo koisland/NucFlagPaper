@@ -1,33 +1,32 @@
-from os.path import join
 
-
-THREADS = 4
-GLOB_DATA_MANIFEST = "{exp}/manifest.tsv"
-EXPERIMENTS = glob_wildcards(GLOB_DATA_MANIFEST).exp
-
-
-wildcard_constraints:
-    exp="|".join(EXPERIMENTS)
-
-
-rule download_manifest:
-    input:
-        script="download.sh",
-        manifest=GLOB_DATA_MANIFEST,
+rule download_files:
     output:
-        touch(join("{exp}", "download_data.done"))
+        touch(join(DATA_DIR, "{sm}", "{dtype}", "download_{url_hash}.done")),
     log:
-        "logs/download_manifest_{exp}.log"
-    threads: THREADS
+        join(LOGS_DIR, "{sm}", "{dtype}", "download_{url_hash}.log"),
+    params:
+        url=lambda wc: getattr(DATA[wc.sm], wc.dtype)[wc.url_hash].url,
+        output_dir=lambda wc, output: dirname(output[0]),
+    threads: 1
     conda:
-        "env.yaml"
+        "../envs/download.yaml"
     shell:
         """
-        awk -v OFS='\\t' '{{ print $2, $3 }}' {input.manifest} | \
-        parallel -j {threads} --colsep "\\t" 'bash {input.script} {{2}} {wildcards.exp}/{{1}}' 2> {log}
+        if [[ "{params.url}" == s3* ]]; then
+            aws s3 --no-sign-request cp --page-size 500 "{params.url}" {params.output_dir} 2> {log}
+        else    
+            wget --no-verbose --no-check-certificate {params.url} -P {params.output_dir} 2> {log}
+        fi
         """
 
 
 rule download_all:
     input:
-        expand(rules.download_manifest.output, exp=EXPERIMENTS)
+        expand(
+            rules.download_files.output,
+            zip,
+            sm=SAMPLES,
+            dtype=DTYPES,
+            url_hash=URL_HASHES,
+        ),
+    default_target: True

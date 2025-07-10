@@ -25,7 +25,7 @@ for cfg_sm in config["samples"]:
         "HMMFlaggerEndToEndWithMapping.suffixForMapping": f"HiFi_{sm_id}_map",
         "HMMFlaggerEndToEndWithMapping.hap1AssemblyFasta": asm_1,
         "HMMFlaggerEndToEndWithMapping.hap2AssemblyFasta": asm_2,
-        "HMMFlaggerEndToEndWithMapping.readFiles":  reads,
+        "HMMFlaggerEndToEndWithMapping.readFiles": reads,
         "HMMFlaggerEndToEndWithMapping.aligner": aligner,
         "HMMFlaggerEndToEndWithMapping.presetForMapping": aligner_preset,
         "HMMFlaggerEndToEndWithMapping.kmerSize": kmer_size,
@@ -44,14 +44,14 @@ for cfg_sm in config["samples"]:
 
 
 wildcard_constraints:
-    sm="|".join(all_sm_data.keys())
+    sm="|".join(all_sm_data.keys()),
 
 
 rule run_flagger:
     input:
         wdl="flagger/wdls/workflows/hmm_flagger_end_to_end_with_mapping.wdl",
         json=lambda wc: all_sm_data[wc.sm]["config"],
-        inputs=lambda wc: all_sm_data[wc.sm]["inputs"]
+        inputs=lambda wc: all_sm_data[wc.sm]["inputs"],
     output:
         jobs_store=directory(os.path.join(output_dir, "{sm}", "jobStore")),
         json=os.path.join(output_dir, "{sm}_outputs.json"),
@@ -59,14 +59,13 @@ rule run_flagger:
     params:
         working_dir=lambda wc, output: os.path.dirname(output.jobs_store),
         logs_dir=directory(os.path.join(output_dir, "logs", "{sm}")),
-    threads:
-        lambda wc: all_sm_data[wc.sm]["threads"]
+    threads: lambda wc: all_sm_data[wc.sm]["threads"]
     log:
-        "logs/flagger/run_flagger_{sm}.log"
+        "logs/flagger/run_flagger_{sm}.log",
     resources:
-        mem="100GB"
+        mem="100GB",
     conda:
-        "env.yaml"
+        "../../envs/misasim.yaml"
     shell:
         """
         toil-wdl-runner \
@@ -87,8 +86,8 @@ rule run_flagger:
         --disableProgress 2>&1 | tee {log}
         """
 
+
 rule flagger:
     input:
-        expand(rules.run_flagger.output, sm=all_sm_data.keys())
-    default_target:
-        True
+        expand(rules.run_flagger.output, sm=all_sm_data.keys()),
+    default_target: True
