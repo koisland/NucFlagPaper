@@ -1,12 +1,14 @@
+import json
 from os.path import join
 
 
 HAPS = ["MATERNAL", "PATERNAL"]
 
-# {str: {Literal["fa"]: str, Literal["seed_opts"]: dict[int, tuple[str, int, int]]}}
+# {str: {Literal["fa"]: str, Literal["seed_opts"]: dict[int, dict[str, Any]]}}
 SAMPLE_OPTS = config["samples"]
 OUTPUT_DIR = config.get("output_dir", "results/misasim")
 LOG_DIR = config.get("log_dir", "logs/misasim")
+GROUP_BY = config.get("group_by")
 SAMPLES = []
 SEEDS = []
 for sm, opts in SAMPLE_OPTS.items():
@@ -40,18 +42,6 @@ rule compile_misasim:
         """
 
 
-rule write_misasim_types:
-    output:
-        fa=join(OUTPUT_DIR, "{sm}", "params.tsv"),
-    run:
-        with open(str(output), "wt") as fh:
-            print("seed\tmtype\tnum\tmax_length", file=fh)
-            for seed, (mtype, num, length) in SAMPLE_OPTS[wildcards.sm][
-                "seed_opts"
-            ].items():
-                print(f"{seed}\t{mtype}\t{num}\t{length}", file=fh)
-
-
 rule generate_misassemblies:
     input:
         bn=rules.compile_misasim.output,
@@ -60,26 +50,22 @@ rule generate_misassemblies:
         fa=join(OUTPUT_DIR, "{sm}", "{seed}.fa"),
         bed=join(OUTPUT_DIR, "{sm}", "{seed}.bed"),
     params:
-        mtype=lambda wc: SAMPLE_OPTS[wc.sm]["seed_opts"][int(wc.seed)][0],
-        num=lambda wc: SAMPLE_OPTS[wc.sm]["seed_opts"][int(wc.seed)][1],
-        length_arg=lambda wc: (
-            f"-l {SAMPLE_OPTS[wc.sm]['seed_opts'][int(wc.seed)][2]}"
-            if SAMPLE_OPTS[wc.sm]["seed_opts"][int(wc.seed)][0] != "break"
-            else ""
-        ),
         # Group by chromosome. Choose one hap to get misassembled.
-        group_by=r"^(.*?)_.*?$",
+        # r"^(.*?)_.*?$"
+        group_by=f"-g \"{config['group_by']}\"" if config.get("group_by") else "",
+        # JSON str with seed options.
+        # Must be array. ([{"mtype": ..., "number": ..., "length": ...}])
+        cfg=lambda wc: json.dumps([SAMPLE_OPTS[wc.sm]["seed_opts"][int(wc.seed)]])
     log:
         join(LOG_DIR, "generate_misassemblies_{sm}_{seed}.log"),
     shell:
         """
-        {input.bn} {params.mtype} \
-        -n {params.num} \
-        {params.length_arg} \
+        {input.bn} multiple \
+        -p <(echo '{params.cfg}') \
         -s {wildcards.seed} \
         -i {input.fa} \
         -o {output.fa} \
-        -g "{params.group_by}" \
+        {params.group_by} \
         -b {output.bed} 2> {log}
         """
 
@@ -102,6 +88,5 @@ rule all:
     input:
         # Then generate misassemblies and check them with nucflag and flagger.
         expand(rules.generate_misassemblies.output, zip, sm=SAMPLES, seed=SEEDS),
-        expand(rules.write_misasim_types.output, sm=SAMPLES),
         expand(rules.split_asm_misasim.output, zip, sm=SAMPLES, seed=SEEDS, hap=HAPS),
     default_target: True

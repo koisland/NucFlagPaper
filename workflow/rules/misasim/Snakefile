@@ -11,7 +11,6 @@ from collections import defaultdict
     Literal["samples"]: {
         str: {
             Literal["asm_fa"]: str,
-            Literal["bed"]: str,
             Literal["reads"]: list[str],
             Literal["preset"]: str
         }
@@ -32,36 +31,20 @@ BENCHMARK_DIR = config["benchmarks_dir"]
 NUCFLAG_BENCHMARK_DIR = join(BENCHMARK_DIR, "nucflag")
 MISASIM_BENCHMARK_DIR = join(BENCHMARK_DIR, "simulated")
 
-SLOP_REGION = 500_000
-DOWNSAMPLE_PERC = [0.50, 0.33]
-
-SAMPLE_REGIONS = defaultdict(list)
-for sample, cfg in SAMPLES.items():
-    bedfile = cfg["bed"]
-    with open(bedfile) as fh:
-        for line in fh:
-            contig, start, end, *_ = line.strip().split("\t")
-            SAMPLE_REGIONS[sample].append(f"{contig}~{start}~{end}")
-
 
 wildcard_constraints:
-    sm="|".join(SAMPLE_REGIONS.keys()),
-    region="|".join(rgn for rgns in SAMPLE_REGIONS.values() for rgn in rgns),
+    sm="|".join(SAMPLES.keys()),
 
 
-NUM = list(range(1, config.get("max_num", 3)))
-LEN = config.get("lengths", [10, 500, 1_000, 10_000, 50_000])
+NUM = 10_000
+LEN = config.get("lengths", [10, 50, 500, 1_000, 10_000, 50_000])
 MTYPES = config.get("mtype", ["misjoin", "false-duplication", "gap", "inversion"])
-ALL_MTYPES = []
-for mtype in MTYPES:
-    if mtype == "break":
-        lengths = [1]
-    else:
-        lengths = LEN
-    for num in NUM:
-        for l in lengths:
-            ALL_MTYPES.append((mtype, num, l))
-
+DOWNSAMPLE_PERC = [0.50, 0.33]
+ALL_MTYPES = [
+    {"mtype": mtype, "num": NUM, "length": length}
+    for mtype in MTYPES
+    for length in LEN
+]
 ALL_MTYPES_SEEDED = dict(zip(range(len(ALL_MTYPES)), ALL_MTYPES))
 
 # Run NucFlag on original assembly on original reads.
@@ -73,132 +56,28 @@ config_base = {
     "benchmarks_dir": NUCFLAG_BENCHMARK_DIR,
     "threads_aln": 24,
     "mem_aln": "50G",
-    "processes_nucflag": 2,
+    "processes_nucflag": 12,
     "threads_nucflag": 2,
     "mem_nucflag": "50G",
     "samtools_view_flag": 2308,
 }
 
-
-# Extract alignments restricted to region.bed
-rule extract_aln_regions:
-    input:
-        # NucFlag BAM of whole assembly
-        bam=join(NUCFLAG_OUTPUT_DIR, "{sm}.bam"),
-        fa=lambda wc: SAMPLES[wc.sm]["asm_fa"],
-    output:
-        bam=join(OUTPUT_DIR, "bam", "{sm}_{region}.bam"),
-        bam_idx=join(OUTPUT_DIR, "bam", "{sm}_{region}.bam.bai"),
-    params:
-        slop_region=SLOP_REGION,
-    conda:
-        "../../envs/misasim.yaml"
-    log:
-        join(LOG_DIR, "extract_aln_{sm}_{region}.log"),
-    shell:
-        """
-        samtools faidx {input.fa}
-        samtools view -L \
-            <(bedtools slop -i <(echo {wildcards.region} | sed 's/~/\\t/g') -g "{input.fa}.fai") {input.bam} -bh -o {output.bam} 2> {log}
-        samtools index {output.bam} 2> {log}
-        """
-
-
-rule extract_read_names:
-    input:
-        rules.extract_aln_regions.output.bam,
-    output:
-        join(OUTPUT_DIR, "reads", "{sm}_{region}.txt"),
-    conda:
-        "../../envs/misasim.yaml"
-    shell:
-        """
-        samtools view {input} | cut -f 1 | sort | uniq > {output}
-        """
-
-
-# Speed up alignment by subsetting reads to region.
-rule extract_reads:
-    input:
-        reads_list=rules.extract_read_names.output,
-        reads=lambda wc: SAMPLES[wc.sm]["reads"],
-    output:
-        join(OUTPUT_DIR, "reads", "{sm}_{region}.fastq.gz"),
-    conda:
-        "../../envs/misasim.yaml"
-    log:
-        join(LOG_DIR, "extract_reads_{sm}_{region}.log"),
-    shell:
-        """
-        seqtk subseq <(zcat {input.reads}) {input.reads_list} | bgzip > {output} 2> {log}
-        """
-
-
 # Downsample reads by 100%, 75%, 50%
 rule downsample_reads:
     input:
-        rules.extract_reads.output,
+        reads=lambda wc: SAMPLES[wc.sm]["reads"],
     output:
-        join(OUTPUT_DIR, "reads", "{sm}_{region}-{perc}.fastq.gz"),
+        join(OUTPUT_DIR, "reads", "{sm}_{perc}.fastq.gz"),
     params:
         sample="{perc}",
     conda:
         "../../envs/misasim.yaml"
     log:
-        join(LOG_DIR, "downsample_reads_{sm}_{region}_{perc}.log"),
+        join(LOG_DIR, "downsample_reads_{sm}_{perc}.log"),
     shell:
         """
-        seqtk sample {input} {params.sample} | bgzip > {output}
+        seqtk sample <(zcat {input}) {params.sample} | bgzip > {output}
         """
-
-
-rule extract_fa_regions:
-    input:
-        asm=lambda wc: SAMPLES[wc.sm]["asm_fa"],
-    output:
-        fa=join(OUTPUT_DIR, "asm", "{sm}_{region}.fa"),
-        fai=join(OUTPUT_DIR, "asm", "{sm}_{region}.fa.fai"),
-    log:
-        join(LOG_DIR, "extract_{sm}_{region}.log"),
-    conda:
-        "../../envs/misasim.yaml"
-    shell:
-        """
-        seqtk subseq {input.asm} <(echo {wildcards.region} | sed 's/~/\\t/g') > {output.fa} 2> {log}
-        samtools faidx {output.fa} 2>> {log}
-        """
-
-
-# Subset
-# Normal
-config_base["samples"].extend(
-    (
-        {
-            "name": f"{sm}-{region}-subset",
-            "asm_fa": expand(rules.extract_fa_regions.output, sm=sm, region=region)[0],
-            "reads": expand(rules.extract_reads.output, sm=sm, region=region),
-            "preset": SAMPLES[sm]["preset"],
-        }
-        for sm, regions in SAMPLE_REGIONS.items()
-        for region in regions
-    )
-)
-# Downsampled.
-config_base["samples"].extend(
-    [
-        {
-            "name": f"{sm}-{region}-subset-{perc}",
-            "asm_fa": expand(rules.extract_fa_regions.output, sm=sm, region=region)[0],
-            "reads": expand(
-                rules.downsample_reads.output, sm=sm, region=region, perc=perc
-            ),
-            "preset": SAMPLES[sm]["preset"],
-        }
-        for sm, regions in SAMPLE_REGIONS.items()
-        for region in regions
-        for perc in DOWNSAMPLE_PERC
-    ]
-)
 
 
 # Generate misassemblies
@@ -210,12 +89,11 @@ module misasim:
             "output_dir": MISASIM_OUTPUT_DIR,
             "log_dir": MISASIM_LOG_DIR,
             "samples": {
-                f"{sm}_{region}": {
-                    "fa": expand(rules.extract_fa_regions.output, sm=sm, region=region),
+                sm: {
+                    "fa": SAMPLES[sm]["asm_fa"],
                     "seed_opts": ALL_MTYPES_SEEDED,
                 }
-                for sm, regions in SAMPLE_REGIONS.items()
-                for region in regions
+                for sm in SAMPLES.keys()
             },
         }
 
@@ -227,31 +105,29 @@ use rule * from misasim as ms_*
 config_base["samples"].extend(
     [
         {
-            "name": f"{sm}_{rgn}-{mtype}-{num}-{length}",
-            "asm_fa": join(MISASIM_OUTPUT_DIR, f"{sm}_{rgn}", f"{seed}.fa"),
-            "reads": expand(rules.extract_reads.output, sm=sm, region=rgn),
-            "preset": SAMPLES[sm]["preset"],
+            "name": f"{sm}_{cfg['mtype']}-{cfg['num']}-{cfg['length']}",
+            "asm_fa": join(MISASIM_OUTPUT_DIR, sm, f"{seed}.fa"),
+            "reads": SAMPLES[sm]["reads"],
+            "preset": "ont_r10" if SAMPLES[sm]["preset"] == "ont" else SAMPLES[sm]["preset"],
         }
-        for sm, regions in SAMPLE_REGIONS.items()
-        for rgn in regions
-        for seed, (mtype, num, length) in ALL_MTYPES_SEEDED.items()
+        for sm in SAMPLES.keys()
+        for seed, cfg in ALL_MTYPES_SEEDED.items()
     ]
 )
 # Misassemblies
 config_base["samples"].extend(
     [
         {
-            "name": f"{sm}_{rgn}-{perc}-{mtype}-{num}-{length}",
-            "asm_fa": join(MISASIM_OUTPUT_DIR, f"{sm}_{rgn}", f"{seed}.fa"),
+            "name": f"{sm}_{perc}_{cfg['mtype']}-{cfg['num']}-{cfg['length']}",
+            "asm_fa": join(MISASIM_OUTPUT_DIR, sm, f"{seed}.fa"),
             "reads": expand(
-                rules.downsample_reads.output, sm=sm, region=rgn, perc=perc
+                rules.downsample_reads.output, sm=sm, perc=perc
             ),
-            "preset": SAMPLES[sm]["preset"],
+            "preset": "ont_r10" if SAMPLES[sm]["preset"] == "ont" else SAMPLES[sm]["preset"],
         }
-        for sm, regions in SAMPLE_REGIONS.items()
-        for rgn in regions
+        for sm in SAMPLES.keys()
         for perc in DOWNSAMPLE_PERC
-        for seed, (mtype, num, length) in ALL_MTYPES_SEEDED.items()
+        for seed, cfg in ALL_MTYPES_SEEDED.items()
     ]
 )
 

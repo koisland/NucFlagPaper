@@ -22,17 +22,17 @@ def get_sample_misassembly_samples(
     for sample, data_sources in data.items():
         for dtype, read_sources in [
             ("hifi", data_sources.hifi),
-            ("ont", data_sources.ont),
+            ("ont_r10", data_sources.ont),
         ]:
             data_sample_info = {}
 
             asm_info = next(iter(data_sources.assembly.values()))
             data_sample_info["asm_fa"] = asm_info.path
             data_sample_info["reads"] = [read.path for read in read_sources.values()]
-            data_sample_info["bed"] = config["regions"][sample]
+            # data_sample_info["bed"] = config["regions"][sample]
             data_sample_info["preset"] = dtype
 
-            samples[sample] = data_sample_info
+            samples[f"{sample}_{dtype}"] = data_sample_info
 
     return samples
 
