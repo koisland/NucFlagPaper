@@ -38,10 +38,10 @@ wildcard_constraints:
 
 NUM = 10_000
 LEN = config.get("lengths", [10, 50, 500, 1_000, 10_000, 50_000])
-MTYPES = config.get("mtype", ["misjoin", "false-duplication", "gap", "inversion"])
+MTYPES = config.get("mtype", ["misjoin", "false_duplication", "gap", "inversion"])
 DOWNSAMPLE_PERC = [0.50, 0.33]
 ALL_MTYPES = [
-    {"mtype": mtype, "num": NUM, "length": length}
+    {"mtype": mtype, "number": NUM, "length": length}
     for mtype in MTYPES
     for length in LEN
 ]
@@ -76,7 +76,7 @@ rule downsample_reads:
         join(LOG_DIR, "downsample_reads_{sm}_{perc}.log"),
     shell:
         """
-        seqtk sample <(zcat {input}) {params.sample} | bgzip > {output}
+        seqtk sample <(zcat -f {input}) {params.sample} | bgzip > {output}
         """
 
 
@@ -105,7 +105,7 @@ use rule * from misasim as ms_*
 config_base["samples"].extend(
     [
         {
-            "name": f"{sm}_{cfg['mtype']}-{cfg['num']}-{cfg['length']}",
+            "name": f"{sm}_{cfg['mtype']}-{cfg['number']}-{cfg['length']}",
             "asm_fa": join(MISASIM_OUTPUT_DIR, sm, f"{seed}.fa"),
             "reads": SAMPLES[sm]["reads"],
             "preset": "ont_r10" if SAMPLES[sm]["preset"] == "ont" else SAMPLES[sm]["preset"],
@@ -118,7 +118,7 @@ config_base["samples"].extend(
 config_base["samples"].extend(
     [
         {
-            "name": f"{sm}_{perc}_{cfg['mtype']}-{cfg['num']}-{cfg['length']}",
+            "name": f"{sm}_{perc}_{cfg['mtype']}-{cfg['number']}-{cfg['length']}",
             "asm_fa": join(MISASIM_OUTPUT_DIR, sm, f"{seed}.fa"),
             "reads": expand(
                 rules.downsample_reads.output, sm=sm, perc=perc

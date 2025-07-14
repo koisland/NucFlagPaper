@@ -8,7 +8,7 @@ HAPS = ["MATERNAL", "PATERNAL"]
 SAMPLE_OPTS = config["samples"]
 OUTPUT_DIR = config.get("output_dir", "results/misasim")
 LOG_DIR = config.get("log_dir", "logs/misasim")
-GROUP_BY = config.get("group_by")
+GROUP_BY = config.get("group_by", r"^(.*?)_(.*?)$")
 SAMPLES = []
 SEEDS = []
 for sm, opts in SAMPLE_OPTS.items():
@@ -48,11 +48,14 @@ rule generate_misassemblies:
         fa=lambda wc: SAMPLE_OPTS[wc.sm]["fa"],
     output:
         fa=join(OUTPUT_DIR, "{sm}", "{seed}.fa"),
+        cfg=join(OUTPUT_DIR, "{sm}", "{seed}.json"),
         bed=join(OUTPUT_DIR, "{sm}", "{seed}.bed"),
     params:
         # Group by chromosome. Choose one hap to get misassembled.
         # r"^(.*?)_.*?$"
-        group_by=f"-g \"{config['group_by']}\"" if config.get("group_by") else "",
+        # No group. All haps get misassembled.
+        # r"^(.*?)_(.*?)$"
+        group_by=f"-g \"{GROUP_BY}\"" if GROUP_BY else "",
         # JSON str with seed options.
         # Must be array. ([{"mtype": ..., "number": ..., "length": ...}])
         cfg=lambda wc: json.dumps([SAMPLE_OPTS[wc.sm]["seed_opts"][int(wc.seed)]])
@@ -60,8 +63,9 @@ rule generate_misassemblies:
         join(LOG_DIR, "generate_misassemblies_{sm}_{seed}.log"),
     shell:
         """
+        echo '{params.cfg}' > {output.cfg}
         {input.bn} multiple \
-        -p <(echo '{params.cfg}') \
+        -p {output.cfg} \
         -s {wildcards.seed} \
         -i {input.fa} \
         -o {output.fa} \
