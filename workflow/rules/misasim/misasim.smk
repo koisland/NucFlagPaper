@@ -55,10 +55,10 @@ rule generate_misassemblies:
         # r"^(.*?)_.*?$"
         # No group. All haps get misassembled.
         # r"^(.*?)_(.*?)$"
-        group_by=f"-g \"{GROUP_BY}\"" if GROUP_BY else "",
+        group_by=f'-g "{GROUP_BY}"' if GROUP_BY else "",
         # JSON str with seed options.
         # Must be array. ([{"mtype": ..., "number": ..., "length": ...}])
-        cfg=lambda wc: json.dumps([SAMPLE_OPTS[wc.sm]["seed_opts"][int(wc.seed)]])
+        cfg=lambda wc: json.dumps([SAMPLE_OPTS[wc.sm]["seed_opts"][int(wc.seed)]]),
     log:
         join(LOG_DIR, "generate_misassemblies_{sm}_{seed}.log"),
     shell:
@@ -71,6 +71,19 @@ rule generate_misassemblies:
         -o {output.fa} \
         {params.group_by} \
         -b {output.bed} 2> {log}
+        """
+
+
+rule index_misassemblies_fa:
+    input:
+        fa=rules.generate_misassemblies.output.fa,
+    output:
+        idx=join(OUTPUT_DIR, "{sm}", "{seed}.fa.fai"),
+    conda:
+        "../../envs/misasim.yaml"
+    shell:
+        """
+        samtools faidx {input}
         """
 
 
@@ -92,5 +105,6 @@ rule all:
     input:
         # Then generate misassemblies and check them with nucflag and flagger.
         expand(rules.generate_misassemblies.output, zip, sm=SAMPLES, seed=SEEDS),
+        expand(rules.index_misassemblies_fa.output, zip, sm=SAMPLES, seed=SEEDS),
         expand(rules.split_asm_misasim.output, zip, sm=SAMPLES, seed=SEEDS, hap=HAPS),
     default_target: True

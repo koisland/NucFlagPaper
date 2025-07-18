@@ -29,8 +29,8 @@ def get_sample_misassembly_samples(
             asm_info = next(iter(data_sources.assembly.values()))
             data_sample_info["asm_fa"] = asm_info.path
             data_sample_info["reads"] = [read.path for read in read_sources.values()]
-            # data_sample_info["bed"] = config["regions"][sample]
-            data_sample_info["preset"] = dtype
+            data_sample_info["config"] = config["config"][dtype]
+            data_sample_info["flagger_config"] = config["config"][f"flagger_{dtype}"]
 
             samples[f"{sample}_{dtype}"] = data_sample_info
 

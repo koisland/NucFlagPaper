@@ -36,19 +36,18 @@ wildcard_constraints:
     sm="|".join(SAMPLES.keys()),
 
 
-NUM = 10_000
-LEN = config.get("lengths", [10, 50, 500, 1_000, 10_000, 50_000])
-MTYPES = config.get("mtype", ["misjoin", "false_duplication", "gap", "inversion"])
+NUM = 100
+LEN = config.get("lengths", [1, 2, 10, 100, 1_000, 10_000, 50_000])
+MTYPES = config.get("mtype", ["misjoin", "false_duplication", "inversion"])
 DOWNSAMPLE_PERC = [0.50, 0.33]
-ALL_MTYPES = [
-    {"mtype": mtype, "number": NUM, "length": length}
+ALL_MTYPES_SEEDED = {
+    hash((mtype, NUM, length)): {"mtype": mtype, "number": NUM, "length": length}
     for mtype in MTYPES
     for length in LEN
-]
-ALL_MTYPES_SEEDED = dict(zip(range(len(ALL_MTYPES)), ALL_MTYPES))
+}
 
 # Run NucFlag on original assembly on original reads.
-config_base = {
+nf_config_base = {
     "samples": [{"name": sm, **cfg} for sm, cfg in SAMPLES.items()],
     "output_dir": NUCFLAG_OUTPUT_DIR,
     "output_pileup": False,
@@ -57,10 +56,11 @@ config_base = {
     "threads_aln": 24,
     "mem_aln": "50G",
     "processes_nucflag": 12,
-    "threads_nucflag": 2,
+    "threads_nucflag": 12,
     "mem_nucflag": "50G",
     "samtools_view_flag": 2308,
 }
+
 
 # Downsample reads by 100%, 75%, 50%
 rule downsample_reads:
@@ -102,28 +102,40 @@ use rule * from misasim as ms_*
 
 
 # Misassemblies
-config_base["samples"].extend(
+nf_config_base["samples"].extend(
     [
         {
             "name": f"{sm}_{cfg['mtype']}-{cfg['number']}-{cfg['length']}",
             "asm_fa": join(MISASIM_OUTPUT_DIR, sm, f"{seed}.fa"),
             "reads": SAMPLES[sm]["reads"],
-            "preset": "ont_r10" if SAMPLES[sm]["preset"] == "ont" else SAMPLES[sm]["preset"],
+            "config": SAMPLES[sm]["config"],
         }
         for sm in SAMPLES.keys()
         for seed, cfg in ALL_MTYPES_SEEDED.items()
     ]
 )
-# Misassemblies
-config_base["samples"].extend(
+
+# Downsampled
+nf_config_base["samples"].extend(
+    [
+        {
+            "name": f"{sm}_{perc}",
+            "asm_fa": cfg["asm_fa"],
+            "reads": expand(rules.downsample_reads.output, sm=sm, perc=perc),
+            "config": SAMPLES[sm]["config"],
+        }
+        for sm, cfg in SAMPLES.items()
+        for perc in DOWNSAMPLE_PERC
+    ]
+)
+# Misassemblies downsampled
+nf_config_base["samples"].extend(
     [
         {
             "name": f"{sm}_{perc}_{cfg['mtype']}-{cfg['number']}-{cfg['length']}",
             "asm_fa": join(MISASIM_OUTPUT_DIR, sm, f"{seed}.fa"),
-            "reads": expand(
-                rules.downsample_reads.output, sm=sm, perc=perc
-            ),
-            "preset": "ont_r10" if SAMPLES[sm]["preset"] == "ont" else SAMPLES[sm]["preset"],
+            "reads": expand(rules.downsample_reads.output, sm=sm, perc=perc),
+            "config": SAMPLES[sm]["config"],
         }
         for sm in SAMPLES.keys()
         for perc in DOWNSAMPLE_PERC
@@ -132,81 +144,172 @@ config_base["samples"].extend(
 )
 
 
-# rule split_asm:
-#     input:
-#         fa=ASM_FA,
-#         fai=f"{ASM_FA}.fai",
-#     output:
-#         join("results", "flagger", "seq", f"{SAMPLE}_{{hap}}.fa")
-#     conda:
-#         "env.yaml"
-#     shell:
-#         """
-#         seqtk subseq {input.fa} <(grep {wildcards.hap} {input.fai} | cut -f 1) > {output}
-#         """
-
-
-# module Flagger:
-#     snakefile:
-#         "flagger.smk"
-#     config:
-#         {
-#             "output_dir": join("results", "flagger", "original", SAMPLE),
-#             "samples": [
-#                 {
-#                     "sm_id": f"{SAMPLE}_original",
-#                     "asm_1": expand(rules.split_asm.output, hap="MATERNAL")[0],
-#                     "asm_2": expand(rules.split_asm.output, hap="PATERNAL")[0],
-#                     "alpha": "flagger/misc/alpha_tsv/HiFi_DC_1.2/alpha_optimum_trunc_exp_gaussian_w_16000_n_50.HiFi_DC_1.2_DEC_2024.v1.1.0.tsv",
-#                     "reads": expand(GLOB_HIFI, fname=HIFI_FNAMES),
-#                 }
-#             ]
-#         }
-
-# use rule * from Flagger
-
-
 module NucFlag:
     snakefile:
         "Snakemake-NucFlag/workflow/Snakefile"
     config:
-        config_base
+        nf_config_base
 
 
-use rule * from NucFlag as nf_*
+use rule * from NucFlag
 
 
-# FLAGGER_CFG = {
-#     "output_dir": join("results", "flagger", "simulated"),
-#     "samples": [
-#         {
-#             "sm_id": f"HG002_misasim_{perc}_{mtype}_{num}_{length}",
-#             "asm_1": expand(rules.split_asm_misasim.output, seed=seed, hap="MATERNAL")[0],
-#             "asm_2": expand(rules.split_asm_misasim.output, seed=seed, hap="PATERNAL")[0],
-#             "alpha": "flagger/misc/alpha_tsv/HiFi_DC_1.2/alpha_optimum_trunc_exp_gaussian_w_16000_n_50.HiFi_DC_1.2_DEC_2024.v1.1.0.tsv",
-#             "reads": expand(rules.downsample_reads.output, fname=HIFI_FNAMES, perc=perc),
-#         }
-#         for perc in DOWNSAMPLE_PERC
-#         for seed, (mtype, num, length) in ALL_MTYPES_SEEDED.items()
-#     ]
-# }
+flagger_config_base = {
+    "output_dir": join("results", "flagger"),
+    "benchmarks_dir": join("benchmarks", "flagger"),
+    "logs_dir": join("logs", "flagger"),
+    "samples": [
+        {
+            "name": sm,
+            "asm_fa": SAMPLES[sm]["asm_fa"],
+            "bam": join(NUCFLAG_OUTPUT_DIR, f"{sm}.bam"),
+            "alpha": SAMPLES[sm]["flagger_config"],
+        }
+        for sm in SAMPLES.keys()
+    ],
+}
 
-# module FlaggerSubsetMisasim:
-#     snakefile:
-#         "flagger.smk"
-#     config:
-#         FLAGGER_CFG
+# Misassemblies
+flagger_config_base["samples"].extend(
+    [
+        {
+            "name": f"{sm}_{cfg['mtype']}-{cfg['number']}-{cfg['length']}",
+            "asm_fa": join(MISASIM_OUTPUT_DIR, sm, f"{seed}.fa"),
+            "bam": join(
+                NUCFLAG_OUTPUT_DIR,
+                f"{sm}_{cfg['mtype']}-{cfg['number']}-{cfg['length']}.bam",
+            ),
+            "alpha": SAMPLES[sm]["flagger_config"],
+        }
+        for sm in SAMPLES.keys()
+        for seed, cfg in ALL_MTYPES_SEEDED.items()
+    ]
+)
 
-# use rule * from FlaggerSubsetMisasim as misasim_*
+# Downsampled
+flagger_config_base["samples"].extend(
+    [
+        {
+            "name": f"{sm}_{perc}",
+            "asm_fa": cfg["asm_fa"],
+            "bam": join(NUCFLAG_OUTPUT_DIR, f"{sm}_{perc}.bam"),
+            "alpha": SAMPLES[sm]["flagger_config"],
+        }
+        for sm, cfg in SAMPLES.items()
+        for perc in DOWNSAMPLE_PERC
+    ]
+)
+
+# Misassemblies downsampled
+flagger_config_base["samples"].extend(
+    [
+        {
+            "name": f"{sm}_{perc}_{cfg['mtype']}-{cfg['number']}-{cfg['length']}",
+            "asm_fa": join(MISASIM_OUTPUT_DIR, sm, f"{seed}.fa"),
+            "bam": join(
+                NUCFLAG_OUTPUT_DIR,
+                f"{sm}_{perc}_{cfg['mtype']}-{cfg['number']}-{cfg['length']}.bam",
+            ),
+            "alpha": SAMPLES[sm]["flagger_config"],
+        }
+        for sm in SAMPLES.keys()
+        for perc in DOWNSAMPLE_PERC
+        for seed, cfg in ALL_MTYPES_SEEDED.items()
+    ]
+)
 
 
-# TODO: Test minimap2 lr:hqae, winnowmap map-ont, pbmm2 CCS, pbmm2 SUBREAD. First 10 seeds.
+module Flagger:
+    snakefile:
+        "flagger.smk"
+    config:
+        flagger_config_base
+
+
+use rule * from Flagger
+
+
+inspector_config_base = {
+    "output_dir": join("results", "inspector"),
+    "benchmarks_dir": join("benchmarks", "inspector"),
+    "logs_dir": join("logs", "inspector"),
+    "samples": [
+        {
+            "name": sm,
+            "asm_fa": SAMPLES[sm]["asm_fa"],
+            "bam": join(NUCFLAG_OUTPUT_DIR, f"{sm}.bam"),
+            "datatype": "nanopore" if "ont" in sm else "hifi",
+        }
+        for sm in SAMPLES.keys()
+    ],
+}
+
+# Misassemblies
+inspector_config_base["samples"].extend(
+    [
+        {
+            "name": f"{sm}_{cfg['mtype']}-{cfg['number']}-{cfg['length']}",
+            "asm_fa": join(MISASIM_OUTPUT_DIR, sm, f"{seed}.fa"),
+            "bam": join(
+                NUCFLAG_OUTPUT_DIR,
+                f"{sm}_{cfg['mtype']}-{cfg['number']}-{cfg['length']}.bam",
+            ),
+            "datatype": "nanopore" if "ont" in sm else "hifi",
+        }
+        for sm in SAMPLES.keys()
+        for seed, cfg in ALL_MTYPES_SEEDED.items()
+    ]
+)
+
+# Downsampled
+inspector_config_base["samples"].extend(
+    [
+        {
+            "name": f"{sm}_{perc}",
+            "asm_fa": cfg["asm_fa"],
+            "bam": join(NUCFLAG_OUTPUT_DIR, f"{sm}_{perc}.bam"),
+            "datatype": "nanopore" if "ont" in sm else "hifi",
+        }
+        for sm, cfg in SAMPLES.items()
+        for perc in DOWNSAMPLE_PERC
+    ]
+)
+
+# Misassemblies downsampled
+inspector_config_base["samples"].extend(
+    [
+        {
+            "name": f"{sm}_{perc}_{cfg['mtype']}-{cfg['number']}-{cfg['length']}",
+            "asm_fa": join(MISASIM_OUTPUT_DIR, sm, f"{seed}.fa"),
+            "bam": join(
+                NUCFLAG_OUTPUT_DIR,
+                f"{sm}_{perc}_{cfg['mtype']}-{cfg['number']}-{cfg['length']}.bam",
+            ),
+            "datatype": "nanopore" if "ont" in sm else "hifi",
+        }
+        for sm in SAMPLES.keys()
+        for perc in DOWNSAMPLE_PERC
+        for seed, cfg in ALL_MTYPES_SEEDED.items()
+    ]
+)
+
+
+module Inspector:
+    snakefile:
+        "inspector.smk"
+    config:
+        inspector_config_base
+
+
+use rule * from Inspector
+
+
 # TODO: Calculate precision and recall on all n seeds.
 
 
 rule all:
     input:
-        rules.nf_nucflag.input,
-        # rules.flagger.input,
-        # rules.misasim_flagger.input
+        rules.nucflag.input,
+        rules.flagger.input,
+        rules.inspector.input,
     default_target: True
