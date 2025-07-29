@@ -1,5 +1,5 @@
 import json
-from os.path import join
+from os.path import join, dirname
 
 
 HAPS = ["MATERNAL", "PATERNAL"]
@@ -29,10 +29,9 @@ rule compile_misasim:
     output:
         outbin=join(OUTPUT_DIR, "release", "misasim"),
     params:
-        output_dir=lambda wc, output: os.path.dirname(os.path.dirname(str(output))),
+        output_dir=lambda wc, output: dirname(dirname(str(output))),
     log:
         join(LOG_DIR, "compile_misasim.log"),
-    # TODO: Need cargo.
     shell:
         """
         log_file=$(realpath {log})

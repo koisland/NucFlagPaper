@@ -1,5 +1,6 @@
 software-deployment-method:
   - conda
+  - apptainer
 executor: lsf
 default-resources:
   mem: 8GB

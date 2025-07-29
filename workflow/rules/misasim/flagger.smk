@@ -22,7 +22,7 @@ OUTPUT_DIR = config["output_dir"]
 BENCHMARK_DIR = config["benchmarks_dir"]
 LOG_DIR = config["logs_dir"]
 THREADS = config.get("threads", 12)
-MEM = config.get("mem", "50GB")
+MEM = config.get("mem", "100GB")
 
 
 wildcard_constraints:
@@ -36,7 +36,7 @@ rule create_wg_bed:
         bed=join(OUTPUT_DIR, "{sm}_wg.bed"),
     shell:
         """
-        awk -v OFS="\\t" '{{ print $1, 0, $2 }}'
+        awk -v OFS="\\t" '{{ print $1, 0, $2 }}' {input.fai} > {output.bed}
         """
 
 
@@ -54,7 +54,7 @@ rule bam_to_cov:
     benchmark:
         join(BENCHMARK_DIR, "bam_to_cov_{sm}.txt")
     singularity:
-        "mobinasri/flagger:v1.1.0"
+        "docker://mobinasri/flagger:v1.1.0"
     resources:
         mem=MEM,
     threads: THREADS
@@ -62,7 +62,7 @@ rule bam_to_cov:
         """
         # Put the path to the whole-genome bed file in a json file
         echo "{{" > {output.annot_json}
-        echo \"whole_genome\" : \"{input.wg_bed}\" >> {output.annot_json}
+        echo '"whole_genome": "{input.wg_bed}"' >> {output.annot_json}
         echo "}}" >> {output.annot_json}
 
         # Convert bam to cov.gz with bam2cov program
@@ -87,10 +87,11 @@ rule run_flagger:
     resources:
         mem=MEM,
     singularity:
-        "mobinasri/flagger:v1.1.0"
+        "docker://mobinasri/flagger:v1.1.0"
     threads: THREADS
     shell:
         """
+        mkdir -p {output.output_dir}
         hmm_flagger \
             --input {input.cov} \
             --outputDir {output.output_dir}  \

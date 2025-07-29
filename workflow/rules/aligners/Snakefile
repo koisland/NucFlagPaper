@@ -1,0 +1,13 @@
+
+
+# * Generate misjoin case
+# * Take all cases for non-downsampled hifi.
+# * Run multiple aligners:
+#   1. minimap2 -x lr:hqae
+#   2. winnowmap hifi
+#   3. pbmm2 --preset SUBREAD
+# * Run nucflag on ctrl and case.
+# * Calculate precision recall.
+#
+# Objective:
+# * Which aligner produces the best precision and recall for nucflag?

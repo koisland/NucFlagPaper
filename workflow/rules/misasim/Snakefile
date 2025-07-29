@@ -1,3 +1,4 @@
+import hashlib
 from copy import deepcopy
 from os.path import join
 from collections import defaultdict
@@ -22,14 +23,17 @@ SAMPLES = config["samples"]
 OUTPUT_DIR = config["output_dir"]
 NUCFLAG_OUTPUT_DIR = join(OUTPUT_DIR, "nucflag")
 MISASIM_OUTPUT_DIR = join(OUTPUT_DIR, "simulated")
+SUMMARY_OUTPUT_DIR = join(OUTPUT_DIR, "summary")
 
 LOG_DIR = config["logs_dir"]
 NUCFLAG_LOG_DIR = join(LOG_DIR, "nucflag")
 MISASIM_LOG_DIR = join(LOG_DIR, "simulated")
+SUMMARY_LOG_DIR = join(LOG_DIR, "summary")
 
 BENCHMARK_DIR = config["benchmarks_dir"]
 NUCFLAG_BENCHMARK_DIR = join(BENCHMARK_DIR, "nucflag")
 MISASIM_BENCHMARK_DIR = join(BENCHMARK_DIR, "simulated")
+SUMMARY_BENCHMARK_DIR = join(BENCHMARK_DIR, "summary")
 
 
 wildcard_constraints:
@@ -41,7 +45,11 @@ LEN = config.get("lengths", [1, 2, 10, 100, 1_000, 10_000, 50_000])
 MTYPES = config.get("mtype", ["misjoin", "false_duplication", "inversion"])
 DOWNSAMPLE_PERC = [0.50, 0.33]
 ALL_MTYPES_SEEDED = {
-    hash((mtype, NUM, length)): {"mtype": mtype, "number": NUM, "length": length}
+    # https://stackoverflow.com/a/67219726
+    int.from_bytes(
+        hashlib.sha256(f"{mtype}_{NUM}_{length}".encode()).digest()[:4],
+        'little'
+    ): {"mtype": mtype, "number": NUM, "length": length}
     for mtype in MTYPES
     for length in LEN
 }
@@ -58,6 +66,7 @@ nf_config_base = {
     "processes_nucflag": 12,
     "threads_nucflag": 12,
     "mem_nucflag": "50G",
+    # Filter unmapped, non-primary, and supplementary alignments.
     "samtools_view_flag": 2308,
 }
 
@@ -155,9 +164,9 @@ use rule * from NucFlag
 
 
 flagger_config_base = {
-    "output_dir": join("results", "flagger"),
-    "benchmarks_dir": join("benchmarks", "flagger"),
-    "logs_dir": join("logs", "flagger"),
+    "output_dir": join("results", "misasim", "flagger"),
+    "benchmarks_dir": join("benchmarks", "misasim", "flagger"),
+    "logs_dir": join("logs", "misasim", "flagger"),
     "samples": [
         {
             "name": sm,
@@ -230,9 +239,9 @@ use rule * from Flagger
 
 
 inspector_config_base = {
-    "output_dir": join("results", "inspector"),
-    "benchmarks_dir": join("benchmarks", "inspector"),
-    "logs_dir": join("logs", "inspector"),
+    "output_dir": join("results", "misasim", "inspector"),
+    "benchmarks_dir": join("benchmarks", "misasim", "inspector"),
+    "logs_dir": join("logs", "misasim", "inspector"),
     "samples": [
         {
             "name": sm,
@@ -304,12 +313,60 @@ module Inspector:
 use rule * from Inspector
 
 
-# TODO: Calculate precision and recall on all n seeds.
+rule calculate_precision_recall:
+    input:
+        script="workflow/scripts/misasim/calculate_precision_recall.py",
+        chkpt=[rules.nucflag.input, rules.ms_all.input],
+    output:
+        summary=join(SUMMARY_OUTPUT_DIR, "nucflag_{sm}.tsv")
+    params:
+        fglob_test="*_misassemblies.bed",
+        fglob_truth=lambda wc: f"{wc.sm}/*.bed",
+        dtype=lambda wc: wc.sm.split("_", 1)[1],
+        output_dir=NUCFLAG_OUTPUT_DIR,
+        sim_output_dir=MISASIM_OUTPUT_DIR,
+    shell:
+        """
+        python {input.script} \
+        -a {params.output_dir} \
+        --glob_test "{params.fglob_test}" \
+        -b {params.sim_output_dir} \
+        --glob_truth "{params.fglob_truth}" \
+        -d {params.dtype} > {output}
+        """
 
+use rule calculate_precision_recall as calculate_precision_recall_inspector with:
+    input:
+        script="workflow/scripts/misasim/calculate_precision_recall.py",
+        chkpt=[rules.inspector.input, rules.ms_all.input],
+    output:
+        summary=join(SUMMARY_OUTPUT_DIR, "inspector_{sm}.tsv")
+    params:
+        fglob_test="*.bed",
+        fglob_truth=lambda wc: f"{wc.sm}/*.bed",
+        dtype=lambda wc: wc.sm.split("_", 1)[1],
+        output_dir=join("results", "misasim", "inspector"),
+        sim_output_dir=MISASIM_OUTPUT_DIR,
+
+use rule calculate_precision_recall as calculate_precision_recall_flagger with:
+    input:
+        script="workflow/scripts/misasim/calculate_precision_recall.py",
+        chkpt=rules.flagger.input,
+    output:
+        summary=join(SUMMARY_OUTPUT_DIR, "flagger_{sm}.tsv")
+    params:
+        fglob_test="*/*.bed",
+        fglob_truth=lambda wc: f"{wc.sm}/*.bed",
+        dtype=lambda wc: wc.sm.split("_", 1)[1],
+        output_dir=join("results", "misasim", "flagger"),
+        sim_output_dir=MISASIM_OUTPUT_DIR,
 
 rule all:
     input:
         rules.nucflag.input,
         rules.flagger.input,
         rules.inspector.input,
+        expand(rules.calculate_precision_recall.output, sm=SAMPLES),
+        expand(rules.calculate_precision_recall_inspector.output, sm=SAMPLES),
+        expand(rules.calculate_precision_recall_flagger.output, sm=SAMPLES),
     default_target: True
