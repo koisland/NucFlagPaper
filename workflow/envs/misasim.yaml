@@ -9,3 +9,7 @@ dependencies:
   - pip:
     - toil[all]
     - pandas
+    - polars
+    - seaborn
+    - matplotlib
+    - intervaltree

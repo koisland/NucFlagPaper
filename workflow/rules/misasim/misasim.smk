@@ -73,6 +73,23 @@ rule generate_misassemblies:
         """
 
 
+rule generate_inv_bed:
+    input:
+        rules.generate_misassemblies.output.bed,
+    output:
+        bed=join(OUTPUT_DIR, "{sm}_igv", "{seed}.bed"),
+    shell:
+        """
+        awk -v OFS="\\t" '{{
+            st=$2; end=$3;
+            nst=$7; nend=$8;
+            $2=nst; $3=nend;
+            $7=st; $8=end;
+            print
+        }}' {input} > {output.bed}
+        """
+
+
 rule index_misassemblies_fa:
     input:
         fa=rules.generate_misassemblies.output.fa,
@@ -105,5 +122,6 @@ rule all:
         # Then generate misassemblies and check them with nucflag and flagger.
         expand(rules.generate_misassemblies.output, zip, sm=SAMPLES, seed=SEEDS),
         expand(rules.index_misassemblies_fa.output, zip, sm=SAMPLES, seed=SEEDS),
+        expand(rules.generate_inv_bed.output, zip, sm=SAMPLES, seed=SEEDS),
         expand(rules.split_asm_misasim.output, zip, sm=SAMPLES, seed=SEEDS, hap=HAPS),
     default_target: True

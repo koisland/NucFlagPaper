@@ -1,5 +1,3 @@
-
-
 # * Generate misjoin case
 # * Take all cases for non-downsampled hifi.
 # * Run multiple aligners:

@@ -32,15 +32,14 @@ rule run_inspector:
     params:
         datatype=lambda wc: SAMPLES[wc.sm]["datatype"],
         # Keep in params as if any core dump will trigger rerun.
-        inspector_dir="workflow/rules/misasim/Inspector"
+        inspector_dir="workflow/rules/misasim/Inspector",
     log:
         abspath(join(LOG_DIR, "run_inspector_{sm}.log")),
     benchmark:
-        join(BENCHMARK_DIR, "run_inspector_{sm}.txt"),
+        join(BENCHMARK_DIR, "run_inspector_{sm}.txt")
     resources:
         mem=MEM,
-    threads:
-        THREADS
+    threads: THREADS
     conda:
         "../../envs/inspector.yaml"
     shell:
@@ -64,6 +63,7 @@ rule run_inspector:
         --skip_read_mapping &> {log}
         """
 
+
 # TODO: Be more lenient and only take significant calls for small_scale_errors
 rule merge_calls:
     input:
@@ -76,7 +76,8 @@ rule merge_calls:
         <(awk -v OFS="\t" 'NR > 1 {{ print $1, $2, $3, $5}}' {input.inspector_dir}/structural_error.bed) \
         <(awk -v OFS="\t" 'NR > 1 {{ print $1, $2, $3, $8}}' {input.inspector_dir}/small_scale_error.bed) > {output}
         """
-    
+
+
 rule inspector:
     input:
         expand(rules.run_inspector.output, sm=SAMPLES.keys()),

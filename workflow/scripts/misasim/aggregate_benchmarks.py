@@ -70,19 +70,22 @@ def plot_agg(df: pl.DataFrame, y: str, order: list[str]) -> sns.FacetGrid:
         "method",
         order=order,
         hue_order=order,
-        palette=sns.color_palette()[0:len(order)],
+        palette=sns.color_palette()[0 : len(order)],
         alpha=0.6,
         size=3,
-        linewidth=1
+        linewidth=1,
     )
     return g
+
 
 def main():
     ap = argparse.ArgumentParser()
     # /project/logsdon_shared/projects/Keith/NucFlagPaper/benchmarks/misasim/nucflag
     ap.add_argument("-n", "--nucflag_bmks_dir", default="benchmarks/misasim/nucflag")
     # /project/logsdon_shared/projects/Keith/NucFlagPaper/benchmarks/misasim/inspector
-    ap.add_argument("-i", "--inspector_bmks_dir", default="benchmarks/misasim/inspector")
+    ap.add_argument(
+        "-i", "--inspector_bmks_dir", default="benchmarks/misasim/inspector"
+    )
     # /project/logsdon_shared/projects/Keith/NucFlagPaper/benchmarks/misasim/flagger
     ap.add_argument("-f", "--flagger_bmks_dir", default="benchmarks/misasim/flagger")
     ap.add_argument("-o", "--output_dir", default="results/benchmarks")
@@ -103,6 +106,7 @@ def main():
         ]
     ).to_pandas()
 
+    os.makedirs(args.output_dir, exist_ok=True)
     order = ["flagger", "inspector", "nucflag"]
     g_rss = plot_agg(df, "max_rss", order)
     g_rss.savefig(os.path.join(args.output_dir, "rss.png"))

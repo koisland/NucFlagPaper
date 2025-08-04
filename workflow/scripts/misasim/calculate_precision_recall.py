@@ -67,7 +67,9 @@ def calculate_precision_recall(
     # * Store coordinates
     # * Iterate thru misassemblies in simulated case and count number of intervals where no overlap
     itree_ctrl_misassemblies_misasim_coords = defaultdict(intervaltree.IntervalTree)
-    for row in df_bed_ctrl.filter(~pl.col("name").is_in(GOOD_MTYPES)).iter_rows(named=True):
+    for row in df_bed_ctrl.filter(~pl.col("name").is_in(GOOD_MTYPES)).iter_rows(
+        named=True
+    ):
         try:
             ovl = itree_update_ranges[row["chrom"]].overlap(row["st"], row["end"])
         except KeyError:
@@ -88,9 +90,9 @@ def calculate_precision_recall(
 
     itree_misassemblies = defaultdict(intervaltree.IntervalTree)
     itree_new_misassemblies = defaultdict(intervaltree.IntervalTree)
-    for row in df_bed_misassemblies.filter(~pl.col("name").is_in(GOOD_MTYPES)).iter_rows(
-        named=True
-    ):
+    for row in df_bed_misassemblies.filter(
+        ~pl.col("name").is_in(GOOD_MTYPES)
+    ).iter_rows(named=True):
         ovl = itree_ctrl_misassemblies_misasim_coords[row["chrom"]].overlap(
             row["st"], row["end"]
         )
@@ -174,7 +176,9 @@ def read_files(fglob: str, expected_columns: tuple[str]) -> pl.DataFrame:
         .with_columns(is_control=pl.col("mtype").is_null())
         .with_columns(
             # Replace misspelling
-            mtype=pl.when(pl.col("mtype") == "false_dupe").then(pl.lit("false_duplication")).otherwise(pl.col("mtype"))
+            mtype=pl.when(pl.col("mtype") == "false_dupe")
+            .then(pl.lit("false_duplication"))
+            .otherwise(pl.col("mtype"))
         )
     )
     return df
@@ -187,21 +191,32 @@ def read_truth_files(
     dfs = {}
     for file in glob.glob(fglob_truth):
         # seed, _ = os.path.splitext(os.path.basename(file))
-        df = pl.read_csv(
-            file, separator="\t", has_header=False, new_columns=expected_columns
-        ).with_columns(
-            # Replace misspelling
-            name=pl.when(pl.col("name") == "false_dupe").then(pl.lit("false_duplication")).otherwise(pl.col("name"))
-        ).filter(~pl.col("name").is_in(GOOD_MTYPES))
+        df = (
+            pl.read_csv(
+                file, separator="\t", has_header=False, new_columns=expected_columns
+            )
+            .with_columns(
+                # Replace misspelling
+                name=pl.when(pl.col("name") == "false_dupe")
+                .then(pl.lit("false_duplication"))
+                .otherwise(pl.col("name"))
+            )
+            .filter(~pl.col("name").is_in(GOOD_MTYPES))
+        )
         unique_mtypes = df["name"].unique()
         # Per chrom
         numbers = df.group_by(["chrom"]).agg(pl.col("name").len())["name"].mode()
-        lengths = df.with_columns(length=pl.col("end")-pl.col("st")).group_by(["name"]).agg(pl.col("length").unique()).explode("length")["length"]
-        
+        lengths = (
+            df.with_columns(length=pl.col("end") - pl.col("st"))
+            .group_by(["name"])
+            .agg(pl.col("length").unique())
+            .explode("length")["length"]
+        )
+
         mtype = ",".join(unique_mtypes)
         num = ",".join(str(n) for n in numbers)
-        length = ",".join(str(l) for l in lengths) 
- 
+        length = ",".join(str(l) for l in lengths)
+
         df = df.with_columns(
             mtype=pl.lit(mtype),
             num=pl.lit(num),
@@ -263,7 +278,14 @@ def main():
     )
 
     header = [
-        "sample", "downsample", "dtype", "mtype", "num", "len", "precision", "recall"
+        "sample",
+        "downsample",
+        "dtype",
+        "mtype",
+        "num",
+        "len",
+        "precision",
+        "recall",
     ]
     print("\t".join(header))
 
@@ -276,12 +298,10 @@ def main():
         if not downsample:
             is_downsampled = pl.col("downsample").is_null()
         else:
-            is_downsampled = pl.col("downsample") == downsample  
+            is_downsampled = pl.col("downsample") == downsample
 
         dfs_group_test = df_test.filter(
-            (pl.col("sample") == sample)
-            & is_downsampled
-            & (pl.col("dtype") == dtype)
+            (pl.col("sample") == sample) & is_downsampled & (pl.col("dtype") == dtype)
         ).partition_by(["mtype", "num", "len"], as_dict=True)
 
         for mtype_group, df_groups_test_mtypes in dfs_group_test.items():
@@ -289,13 +309,11 @@ def main():
             if not isinstance(df_mtype_truth, pl.DataFrame):
                 print(f"Skipping {mtype_group}...", file=sys.stderr)
                 continue
-            res = calculate_precision_recall(df_groups_test_mtypes, df_group_control, df_mtype_truth)
-            
-            row = [
-                *group,
-                *mtype_group,
-                *res
-            ]
+            res = calculate_precision_recall(
+                df_groups_test_mtypes, df_group_control, df_mtype_truth
+            )
+
+            row = [*group, *mtype_group, *res]
             print("\t".join(str(elem) for elem in row))
 
 

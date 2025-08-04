@@ -36,10 +36,6 @@ MISASIM_BENCHMARK_DIR = join(BENCHMARK_DIR, "simulated")
 SUMMARY_BENCHMARK_DIR = join(BENCHMARK_DIR, "summary")
 
 
-wildcard_constraints:
-    sm="|".join(SAMPLES.keys()),
-
-
 NUM = 100
 LEN = config.get("lengths", [1, 2, 10, 100, 1_000, 10_000, 50_000])
 MTYPES = config.get("mtype", ["misjoin", "false_duplication", "inversion"])
@@ -47,12 +43,17 @@ DOWNSAMPLE_PERC = [0.50, 0.33]
 ALL_MTYPES_SEEDED = {
     # https://stackoverflow.com/a/67219726
     int.from_bytes(
-        hashlib.sha256(f"{mtype}_{NUM}_{length}".encode()).digest()[:4],
-        'little'
+        hashlib.sha256(f"{mtype}_{NUM}_{length}".encode()).digest()[:4], "little"
     ): {"mtype": mtype, "number": NUM, "length": length}
     for mtype in MTYPES
     for length in LEN
 }
+
+
+wildcard_constraints:
+    sm="|".join(SAMPLES.keys()),
+    perc="|".join(str(p) for p in DOWNSAMPLE_PERC),
+
 
 # Run NucFlag on original assembly on original reads.
 nf_config_base = {
@@ -318,13 +319,15 @@ rule calculate_precision_recall:
         script="workflow/scripts/misasim/calculate_precision_recall.py",
         chkpt=[rules.nucflag.input, rules.ms_all.input],
     output:
-        summary=join(SUMMARY_OUTPUT_DIR, "nucflag_{sm}.tsv")
+        summary=join(SUMMARY_OUTPUT_DIR, "nucflag_{sm}.tsv"),
     params:
         fglob_test="*_misassemblies.bed",
         fglob_truth=lambda wc: f"{wc.sm}/*.bed",
         dtype=lambda wc: wc.sm.split("_", 1)[1],
         output_dir=NUCFLAG_OUTPUT_DIR,
         sim_output_dir=MISASIM_OUTPUT_DIR,
+    conda:
+        "../../envs/misasim.yaml"
     shell:
         """
         python {input.script} \
@@ -335,12 +338,13 @@ rule calculate_precision_recall:
         -d {params.dtype} > {output}
         """
 
+
 use rule calculate_precision_recall as calculate_precision_recall_inspector with:
     input:
         script="workflow/scripts/misasim/calculate_precision_recall.py",
         chkpt=[rules.inspector.input, rules.ms_all.input],
     output:
-        summary=join(SUMMARY_OUTPUT_DIR, "inspector_{sm}.tsv")
+        summary=join(SUMMARY_OUTPUT_DIR, "inspector_{sm}.tsv"),
     params:
         fglob_test="*.bed",
         fglob_truth=lambda wc: f"{wc.sm}/*.bed",
@@ -348,18 +352,40 @@ use rule calculate_precision_recall as calculate_precision_recall_inspector with
         output_dir=join("results", "misasim", "inspector"),
         sim_output_dir=MISASIM_OUTPUT_DIR,
 
+
 use rule calculate_precision_recall as calculate_precision_recall_flagger with:
     input:
         script="workflow/scripts/misasim/calculate_precision_recall.py",
         chkpt=rules.flagger.input,
     output:
-        summary=join(SUMMARY_OUTPUT_DIR, "flagger_{sm}.tsv")
+        summary=join(SUMMARY_OUTPUT_DIR, "flagger_{sm}.tsv"),
     params:
         fglob_test="*/*.bed",
         fglob_truth=lambda wc: f"{wc.sm}/*.bed",
         dtype=lambda wc: wc.sm.split("_", 1)[1],
         output_dir=join("results", "misasim", "flagger"),
         sim_output_dir=MISASIM_OUTPUT_DIR,
+
+
+rule plot_precision_recall:
+    input:
+        script="workflow/scripts/misasim/plot_precision_recall.py",
+        summaries=[
+            rules.calculate_precision_recall.output,
+            rules.calculate_precision_recall_inspector.output,
+            rules.calculate_precision_recall_flagger.output,
+        ],
+    output:
+        directory(join(SUMMARY_OUTPUT_DIR, "{sm}")),
+    params:
+        output_prefix=lambda wc, output: f"{output[0]}/"
+    conda:
+        "../../envs/misasim.yaml"
+    shell:
+        """
+        python {input.script} -i {input.summaries} -o {params.output_prefix}/
+        """
+
 
 rule all:
     input:
@@ -369,4 +395,5 @@ rule all:
         expand(rules.calculate_precision_recall.output, sm=SAMPLES),
         expand(rules.calculate_precision_recall_inspector.output, sm=SAMPLES),
         expand(rules.calculate_precision_recall_flagger.output, sm=SAMPLES),
+        expand(rules.plot_precision_recall.output, sm=SAMPLES),
     default_target: True
