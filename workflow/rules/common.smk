@@ -1,6 +1,6 @@
 import hashlib
 from os.path import join, dirname, basename
-from typing import NamedTuple
+from typing import NamedTuple, Any
 from collections import defaultdict
 from dataclasses import dataclass, field
 
@@ -15,16 +15,17 @@ class DataSourceInfo:
     assembly: dict[str, DataUrlInfo] = field(default_factory=dict)
     hifi: dict[str, DataUrlInfo] = field(default_factory=dict)
     ont: dict[str, DataUrlInfo] = field(default_factory=dict)
+    rm: dict[str, DataUrlInfo] = field(default_factory=dict)
 
 
 DataInfo = tuple[list[str], list[str], list[str], defaultdict[str, DataSourceInfo]]
-ALLOWED_DTYPES = {"assembly", "hifi", "ont"}
+ALLOWED_DTYPES = {"assembly", "hifi", "ont", "rm"}
 
 
 LOGS_DIR = config.get("logs_dir", "logs")
 BMKS_DIR = config.get("benchmarks_dir", "benchmarks")
 DATA_DIR = config.get("data_dir", "data")
-DATA_MANIFEST = config["data_manifest"]
+DATA_MANIFEST = config.get("data_manifest")
 
 
 def get_data_manifest(data_manifest: str, output_dir: str) -> DataInfo:
@@ -52,11 +53,42 @@ def get_data_manifest(data_manifest: str, output_dir: str) -> DataInfo:
 
     return samples, dtypes, url_hashes, data
 
+def get_sample_misassembly_samples(
+    data: defaultdict[str, DataSourceInfo]
+) -> dict[str, dict[str, str | list[str]]]:
+    samples = {}
+    for sample, data_sources in data.items():
+        for dtype, read_sources in [
+            ("hifi", data_sources.hifi),
+            ("ont_r10", data_sources.ont),
+        ]:
+            if not read_sources:
+                continue
 
-SAMPLES, DTYPES, URL_HASHES, DATA = get_data_manifest(DATA_MANIFEST, DATA_DIR)
+            data_sample_info = {}
+
+            asm_info = next(iter(data_sources.assembly.values()))
+            data_sample_info["asm_fa"] = asm_info.path
+            data_sample_info["reads"] = [read.path for read in read_sources.values()]
+            data_sample_info["config"] = config["config"][dtype]
+            data_sample_info["flagger_config"] = config["config"][f"flagger_{dtype}"]
+            data_sample_info["rm"] = [rm.path for rm in data_sources.rm.values()]
+            data_sample_info["group_by"] = config["group_by"]
+            samples[f"{sample}_{dtype}"] = data_sample_info
+
+    return samples
 
 
-wildcard_constraints:
-    sm="|".join(SAMPLES),
-    dtype="|".join(DTYPES),
-    url_hash="|".join(URL_HASHES),
+def get_mtypes_w_seeds(
+    number: int,
+    lengths: list[int],
+    mtypes: list[str],
+) -> dict[int, dict[str, Any]]:
+    return {
+        # https://stackoverflow.com/a/67219726
+        int.from_bytes(
+            hashlib.sha256(f"{mtype}_{number}_{length}".encode()).digest()[:4], "little"
+        ): {"mtype": mtype, "number": number, "length": length}
+        for mtype in mtypes
+        for length in lengths
+    }

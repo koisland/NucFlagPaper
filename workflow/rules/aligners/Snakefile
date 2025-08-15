@@ -1,3 +1,6 @@
+from os.path import join
+
+
 # * Generate misjoin case
 # * Take all cases for non-downsampled hifi.
 # * Run multiple aligners:
@@ -9,3 +12,146 @@
 #
 # Objective:
 # * Which aligner produces the best precision and recall for nucflag?
+
+
+SAMPLES = config["samples"]
+OUTPUT_DIR = config["output_dir"]
+LOG_DIR = config["logs_dir"]
+BENCHMARK_DIR = config["benchmarks_dir"]
+MISASIM_OUTPUT_DIR = config["misasim_output_dir"]
+ALL_MTYPES_SEEDED = config["seeded_mtypes"]
+
+
+nf_config_base = {
+    "samples": [{"name": sm, **cfg} for sm, cfg in SAMPLES.items()],
+    "output_pileup": False,
+    "threads_aln": 24,
+    "mem_aln": "50G",
+    "processes_nucflag": 12,
+    "threads_nucflag": 12,
+    "mem_nucflag": "50G",
+    # Filter unmapped, non-primary, and supplementary alignments.
+    "samtools_view_flag": 2308,
+}
+
+nf_config_mm2 = {
+    **nf_config_base,
+    "output_dir": join(OUTPUT_DIR, "mm2"),
+    "logs_dir": join(LOG_DIR, "mm2"),
+    "benchmarks_dir": join(BENCHMARK_DIR, "mm2"),
+    "aligner": "minimap2",
+    "aligner_opts": "-y -a --eqx --cs -x lr:hqae"
+}
+nf_config_mm2["samples"].extend(
+    [
+        {
+            "name": f"{sm}_{cfg['mtype']}-{cfg['number']}-{cfg['length']}",
+            "asm_fa": join(MISASIM_OUTPUT_DIR, sm, f"{seed}.fa"),
+            "reads": SAMPLES[sm]["reads"],
+            "config": SAMPLES[sm]["config"],
+        }
+        for sm in SAMPLES.keys()
+        for seed, cfg in ALL_MTYPES_SEEDED.items()
+    ]
+)
+
+
+nf_config_wm2 = {
+    **nf_config_base,
+    "output_dir": join(OUTPUT_DIR, "wm2"),
+    "logs_dir": join(LOG_DIR, "wm2"),
+    "benchmarks_dir": join(BENCHMARK_DIR, "wm2"),
+    "aligner": "winnowmap",
+    "aligner_opts": "-y -a --eqx --cs -x map-pb"
+}
+nf_config_wm2["samples"].extend(
+    [
+        {
+            "name": f"{sm}_{cfg['mtype']}-{cfg['number']}-{cfg['length']}",
+            "asm_fa": join(MISASIM_OUTPUT_DIR, sm, f"{seed}.fa"),
+            "reads": SAMPLES[sm]["reads"],
+            "config": SAMPLES[sm]["config"],
+        }
+        for sm in SAMPLES.keys()
+        for seed, cfg in ALL_MTYPES_SEEDED.items()
+    ]
+)
+
+nf_config_pbmm2 = {
+    **nf_config_base,
+    "output_dir": join(OUTPUT_DIR, "pbmm2"),
+    "logs_dir": join(LOG_DIR, "pbmm2"),
+    "benchmarks_dir": join(BENCHMARK_DIR, "pbmm2"),
+    "aligner": "pbmm2",
+    "aligner_opts": "--log-level DEBUG --preset SUBREAD --min-length 5000"
+}
+nf_config_pbmm2["samples"].extend(
+    [
+        {
+            "name": f"{sm}_{cfg['mtype']}-{cfg['number']}-{cfg['length']}",
+            "asm_fa": join(MISASIM_OUTPUT_DIR, sm, f"{seed}.fa"),
+            "reads": SAMPLES[sm]["reads"],
+            "config": SAMPLES[sm]["config"],
+        }
+        for sm in SAMPLES.keys()
+        for seed, cfg in ALL_MTYPES_SEEDED.items()
+    ]
+)
+
+module NucFlag_pbmm2:
+    snakefile:
+        "Snakemake-NucFlag/workflow/Snakefile"
+    config:
+        nf_config_pbmm2
+
+module NucFlag_wm2:
+    snakefile:
+        "Snakemake-NucFlag/workflow/Snakefile"
+    config:
+        nf_config_wm2
+
+module NucFlag_mm2:
+    snakefile:
+        "Snakemake-NucFlag/workflow/Snakefile"
+    config:
+        nf_config_mm2
+
+use rule * from NucFlag_pbmm2 as nf_pbmm2_*
+
+use rule * from NucFlag_wm2 as nf_wm2_*
+
+use rule * from NucFlag_mm2 as nf_mm2_*
+
+
+
+rule calculate_precision_recall:
+    input:
+        script="workflow/scripts/misasim/calculate_precision_recall.py",
+        chkpt=[
+            rules.nf_pbmm2_nucflag.input,
+            rules.nf_wm2_nucflag.input,
+            rules.nf_mm2_nucflag.input,
+        ],
+    output:
+        summary=join(OUTPUT_DIR, "summary", "nucflag_{sm}.tsv"),
+    params:
+        fglob_test="*_misassemblies.bed",
+        fglob_truth=lambda wc: f"{wc.sm}/*.bed",
+        dtype=lambda wc: wc.sm.split("_", 1)[1],
+        output_dir=OUTPUT_DIR,
+        sim_output_dir=MISASIM_OUTPUT_DIR,
+    conda:
+        "../../envs/misasim.yaml"
+    shell:
+        """
+        python {input.script} \
+        -a {params.output_dir} \
+        --glob_test "{params.fglob_test}" \
+        -b {params.sim_output_dir} \
+        --glob_truth "{params.fglob_truth}" \
+        -d {params.dtype} > {output}
+        """
+
+rule all:
+    input:
+        expand(rules.calculate_precision_recall.output, sm=SAMPLES)

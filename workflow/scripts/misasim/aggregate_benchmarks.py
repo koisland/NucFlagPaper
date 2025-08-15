@@ -51,6 +51,8 @@ def read_files(fglob: str) -> pl.DataFrame:
 
 
 def plot_agg(df: pl.DataFrame, y: str, order: list[str]) -> sns.FacetGrid:
+    height = 3
+    aspect_ratio = 1.5
     g = sns.catplot(
         data=df,
         x="method",
@@ -59,8 +61,11 @@ def plot_agg(df: pl.DataFrame, y: str, order: list[str]) -> sns.FacetGrid:
         col="mtype",
         order=order,
         hue_order=order,
+        palette="pastel",
         kind="box",
         hue="method",
+        height=height,
+        aspect=aspect_ratio,
     )
     # https://stackoverflow.com/a/69398767
     g.map(
@@ -70,7 +75,7 @@ def plot_agg(df: pl.DataFrame, y: str, order: list[str]) -> sns.FacetGrid:
         "method",
         order=order,
         hue_order=order,
-        palette=sns.color_palette()[0 : len(order)],
+        palette="pastel",
         alpha=0.6,
         size=3,
         linewidth=1,
@@ -91,20 +96,24 @@ def main():
     ap.add_argument("-o", "--output_dir", default="results/benchmarks")
     args = ap.parse_args()
 
-    df = pl.concat(
-        [
-            read_files(os.path.join(args.flagger_bmks_dir, "*.txt")).with_columns(
-                method=pl.lit("flagger"),
-                step=pl.lit("run_flagger"),
-            ),
-            read_files(os.path.join(args.inspector_bmks_dir, "*.txt")).with_columns(
-                method=pl.lit("inspector")
-            ),
-            read_files(
-                os.path.join(args.nucflag_bmks_dir, "run_nucflag*.tsv")
-            ).with_columns(method=pl.lit("nucflag")),
-        ]
-    ).to_pandas()
+    df = (
+        pl.concat(
+            [
+                read_files(os.path.join(args.flagger_bmks_dir, "*.txt")).with_columns(
+                    method=pl.lit("flagger"),
+                    step=pl.lit("run_flagger"),
+                ),
+                read_files(os.path.join(args.inspector_bmks_dir, "*.txt")).with_columns(
+                    method=pl.lit("inspector")
+                ),
+                read_files(
+                    os.path.join(args.nucflag_bmks_dir, "run_nucflag*.tsv")
+                ).with_columns(method=pl.lit("nucflag")),
+            ]
+        )
+        .sort("method", "dtype", "mtype")
+        .to_pandas()
+    )
 
     os.makedirs(args.output_dir, exist_ok=True)
     order = ["flagger", "inspector", "nucflag"]

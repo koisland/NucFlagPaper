@@ -14,38 +14,17 @@
 }
 """
 
-
-def get_sample_misassembly_samples(
-    data: defaultdict[str, DataSourceInfo]
-) -> dict[str, dict[str, str | list[str]]]:
-    samples = {}
-    for sample, data_sources in data.items():
-        for dtype, read_sources in [
-            ("hifi", data_sources.hifi),
-            ("ont_r10", data_sources.ont),
-        ]:
-            data_sample_info = {}
-
-            asm_info = next(iter(data_sources.assembly.values()))
-            data_sample_info["asm_fa"] = asm_info.path
-            data_sample_info["reads"] = [read.path for read in read_sources.values()]
-            data_sample_info["config"] = config["config"][dtype]
-            data_sample_info["flagger_config"] = config["config"][f"flagger_{dtype}"]
-
-            samples[f"{sample}_{dtype}"] = data_sample_info
-
-    return samples
-
-
 module Misassemblies:
     snakefile:
         "misasim/Snakefile"
     config:
         {
-            "output_dir": config["output_dir"],
-            "logs_dir": config["logs_dir"],
-            "benchmarks_dir": config["benchmarks_dir"],
+            "output_dir": join(config["output_dir"], "misasim"),
+            "logs_dir": join(config["logs_dir"], "misasim"),
+            "benchmarks_dir": join(config["benchmarks_dir"], "misasim"),
             "samples": get_sample_misassembly_samples(DATA),
+            "downsample_perc": DOWNSAMPLE_PERC,
+            "seeded_mtypes": ALL_MTYPES_SEEDED
         }
 
 

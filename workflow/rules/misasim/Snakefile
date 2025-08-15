@@ -1,4 +1,3 @@
-import hashlib
 from copy import deepcopy
 from os.path import join
 from collections import defaultdict
@@ -13,7 +12,9 @@ from collections import defaultdict
         str: {
             Literal["asm_fa"]: str,
             Literal["reads"]: list[str],
-            Literal["preset"]: str
+            Literal["config"]: str,
+            Literal["flagger_config"]: str,
+            Literal["group_by"]: str,
         }
     }
 }
@@ -36,18 +37,8 @@ MISASIM_BENCHMARK_DIR = join(BENCHMARK_DIR, "simulated")
 SUMMARY_BENCHMARK_DIR = join(BENCHMARK_DIR, "summary")
 
 
-NUM = 100
-LEN = config.get("lengths", [1, 2, 10, 100, 1_000, 10_000, 50_000])
-MTYPES = config.get("mtype", ["misjoin", "false_duplication", "inversion"])
-DOWNSAMPLE_PERC = [0.50, 0.33]
-ALL_MTYPES_SEEDED = {
-    # https://stackoverflow.com/a/67219726
-    int.from_bytes(
-        hashlib.sha256(f"{mtype}_{NUM}_{length}".encode()).digest()[:4], "little"
-    ): {"mtype": mtype, "number": NUM, "length": length}
-    for mtype in MTYPES
-    for length in LEN
-}
+DOWNSAMPLE_PERC = config.get("downsample_perc", [0.50, 0.33])
+ALL_MTYPES_SEEDED = config["seeded_mtypes"]
 
 
 wildcard_constraints:
@@ -69,6 +60,7 @@ nf_config_base = {
     "mem_nucflag": "50G",
     # Filter unmapped, non-primary, and supplementary alignments.
     "samtools_view_flag": 2308,
+    "output_format": "cram",
 }
 
 
@@ -102,6 +94,7 @@ module misasim:
                 sm: {
                     "fa": SAMPLES[sm]["asm_fa"],
                     "seed_opts": ALL_MTYPES_SEEDED,
+                    "group_by": SAMPLES[sm].get("group_by", r"^(.*?)$")
                 }
                 for sm in SAMPLES.keys()
             },
@@ -161,7 +154,28 @@ module NucFlag:
         nf_config_base
 
 
+nf_config_by_sm = { 
+    sm_cfg["name"]: sm_cfg
+    for sm_cfg in nf_config_base["samples"]
+}
+
+
 use rule * from NucFlag
+
+
+rule create_tmp_bam:
+    input:
+        bam=lambda wc: rules.aln_merge_read_asm_alignments.output.alignment.format(sm=wc.sm_cond),
+        fa=lambda wc: nf_config_by_sm[wc.sm_cond]["asm_fa"]
+    output:
+        bam=temp(join(NUCFLAG_OUTPUT_DIR, "{sm_cond}.tmp.bam")),
+    conda:
+        "../../envs/misasim.yaml"
+    shell:
+        """
+        samtools view -T {input.fa} {input.bam} -o {output.bam}
+        samtools index {output.bam}
+        """
 
 
 flagger_config_base = {
@@ -172,7 +186,7 @@ flagger_config_base = {
         {
             "name": sm,
             "asm_fa": SAMPLES[sm]["asm_fa"],
-            "bam": join(NUCFLAG_OUTPUT_DIR, f"{sm}.bam"),
+            "bam": expand(rules.create_tmp_bam.output, sm_cond=sm),
             "alpha": SAMPLES[sm]["flagger_config"],
         }
         for sm in SAMPLES.keys()
@@ -185,10 +199,7 @@ flagger_config_base["samples"].extend(
         {
             "name": f"{sm}_{cfg['mtype']}-{cfg['number']}-{cfg['length']}",
             "asm_fa": join(MISASIM_OUTPUT_DIR, sm, f"{seed}.fa"),
-            "bam": join(
-                NUCFLAG_OUTPUT_DIR,
-                f"{sm}_{cfg['mtype']}-{cfg['number']}-{cfg['length']}.bam",
-            ),
+            "bam": expand(rules.create_tmp_bam.output, sm_cond=f"{sm}_{cfg['mtype']}-{cfg['number']}-{cfg['length']}"),
             "alpha": SAMPLES[sm]["flagger_config"],
         }
         for sm in SAMPLES.keys()
@@ -202,7 +213,7 @@ flagger_config_base["samples"].extend(
         {
             "name": f"{sm}_{perc}",
             "asm_fa": cfg["asm_fa"],
-            "bam": join(NUCFLAG_OUTPUT_DIR, f"{sm}_{perc}.bam"),
+            "bam": expand(rules.create_tmp_bam.output, sm_cond=f"{sm}_{perc}"),
             "alpha": SAMPLES[sm]["flagger_config"],
         }
         for sm, cfg in SAMPLES.items()
@@ -216,10 +227,7 @@ flagger_config_base["samples"].extend(
         {
             "name": f"{sm}_{perc}_{cfg['mtype']}-{cfg['number']}-{cfg['length']}",
             "asm_fa": join(MISASIM_OUTPUT_DIR, sm, f"{seed}.fa"),
-            "bam": join(
-                NUCFLAG_OUTPUT_DIR,
-                f"{sm}_{perc}_{cfg['mtype']}-{cfg['number']}-{cfg['length']}.bam",
-            ),
+            "bam": expand(rules.create_tmp_bam.output, sm_cond=f"{sm}_{perc}_{cfg['mtype']}-{cfg['number']}-{cfg['length']}"),
             "alpha": SAMPLES[sm]["flagger_config"],
         }
         for sm in SAMPLES.keys()
@@ -247,7 +255,7 @@ inspector_config_base = {
         {
             "name": sm,
             "asm_fa": SAMPLES[sm]["asm_fa"],
-            "bam": join(NUCFLAG_OUTPUT_DIR, f"{sm}.bam"),
+            "bam": expand(rules.create_tmp_bam.output, sm_cond=sm),
             "datatype": "nanopore" if "ont" in sm else "hifi",
         }
         for sm in SAMPLES.keys()
@@ -260,10 +268,7 @@ inspector_config_base["samples"].extend(
         {
             "name": f"{sm}_{cfg['mtype']}-{cfg['number']}-{cfg['length']}",
             "asm_fa": join(MISASIM_OUTPUT_DIR, sm, f"{seed}.fa"),
-            "bam": join(
-                NUCFLAG_OUTPUT_DIR,
-                f"{sm}_{cfg['mtype']}-{cfg['number']}-{cfg['length']}.bam",
-            ),
+            "bam": expand(rules.create_tmp_bam.output, sm_cond=f"{sm}_{cfg['mtype']}-{cfg['number']}-{cfg['length']}"),
             "datatype": "nanopore" if "ont" in sm else "hifi",
         }
         for sm in SAMPLES.keys()
@@ -277,7 +282,7 @@ inspector_config_base["samples"].extend(
         {
             "name": f"{sm}_{perc}",
             "asm_fa": cfg["asm_fa"],
-            "bam": join(NUCFLAG_OUTPUT_DIR, f"{sm}_{perc}.bam"),
+            "bam": expand(rules.create_tmp_bam.output, sm_cond=f"{sm}_{perc}"),
             "datatype": "nanopore" if "ont" in sm else "hifi",
         }
         for sm, cfg in SAMPLES.items()
@@ -291,10 +296,7 @@ inspector_config_base["samples"].extend(
         {
             "name": f"{sm}_{perc}_{cfg['mtype']}-{cfg['number']}-{cfg['length']}",
             "asm_fa": join(MISASIM_OUTPUT_DIR, sm, f"{seed}.fa"),
-            "bam": join(
-                NUCFLAG_OUTPUT_DIR,
-                f"{sm}_{perc}_{cfg['mtype']}-{cfg['number']}-{cfg['length']}.bam",
-            ),
+            "bam": expand(rules.create_tmp_bam.output, sm_cond=f"{sm}_{perc}_{cfg['mtype']}-{cfg['number']}-{cfg['length']}"),
             "datatype": "nanopore" if "ont" in sm else "hifi",
         }
         for sm in SAMPLES.keys()

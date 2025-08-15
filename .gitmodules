@@ -15,3 +15,13 @@
 	path = workflow/rules/misasim/Inspector
 	url = https://github.com/Maggi-Chen/Inspector.git
 	ignore = "dirty"
+[submodule "workflow/rules/curated/Snakemake-NucFlag"]
+	path = workflow/rules/curated/Snakemake-NucFlag
+	url = https://github.com/logsdon-lab/Snakemake-NucFlag
+	branch = "feature/nucflag-v1.0"
+	ignore = "dirty"
+[submodule "workflow/rules/aligners/Snakemake-NucFlag"]
+	path = workflow/rules/aligners/Snakemake-NucFlag
+	url = https://github.com/logsdon-lab/Snakemake-NucFlag
+	branch = feature/nucflag-v1.0
+	ignore = "dirty"

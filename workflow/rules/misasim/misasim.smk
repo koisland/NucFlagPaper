@@ -8,7 +8,7 @@ HAPS = ["MATERNAL", "PATERNAL"]
 SAMPLE_OPTS = config["samples"]
 OUTPUT_DIR = config.get("output_dir", "results/misasim")
 LOG_DIR = config.get("log_dir", "logs/misasim")
-GROUP_BY = config.get("group_by", r"^(.*?)_(.*?)$")
+GROUP_BY = config.get("group_by", r"^(.*?)$")
 SAMPLES = []
 SEEDS = []
 for sm, opts in SAMPLE_OPTS.items():

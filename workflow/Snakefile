@@ -1,9 +1,29 @@
 include: "rules/common.smk"
+
+
+SAMPLES, DTYPES, URL_HASHES, DATA = get_data_manifest(DATA_MANIFEST, DATA_DIR)
+NUM = 100
+LEN = config.get("lengths", [1, 2, 10, 100, 1_000, 10_000, 50_000])
+MTYPES = config.get("mtype", ["misjoin", "false_duplication", "inversion"])
+DOWNSAMPLE_PERC = [0.50, 0.33]
+ALL_MTYPES_SEEDED = get_mtypes_w_seeds(NUM, LEN, MTYPES)
+
+
+wildcard_constraints:
+    sm="|".join(SAMPLES),
+    dtype="|".join(DTYPES),
+    url_hash="|".join(URL_HASHES),
+
+
 include: "rules/download_data.smk"
 include: "rules/simulate_misassemblies.smk"
+include: "rules/compare_aligners.smk"
+include: "rules/check_curated.smk"
 
 
 rule all:
     input:
         rules.download_all.input,
         rules.sim_all.input,
+        rules.aln_cmp_all.input,
+        rules.hg002_curated_all.input,

@@ -1,0 +1,118 @@
+include: "../common.smk"
+
+
+OUTPUT_DIR = config["output_dir"]
+BENCHMARK_DIR = config["benchmarks_dir"]
+LOG_DIR = config["logs_dir"]
+HIFI = config["hifi"]
+
+
+VCFS = {
+    "v1.0.1": "https://github.com/marbl/HG002-issues/raw/refs/heads/main/patches/already_applied/hg002v1.0.1_to_hg002v1.1.vcf.gz",
+    "v0.9": "https://github.com/marbl/HG002-issues/raw/refs/heads/main/patches/already_applied/hg002v0.9_to_hg002v1.0.vcf.gz",
+    "v0.7": "https://github.com/marbl/HG002-issues/raw/refs/heads/main/patches/already_applied/hg002v0.7_to_hg002v0.9.vcf.gz",
+}
+ASSEMBLIES = {
+    "v1.0.1": "https://s3-us-west-2.amazonaws.com/human-pangenomics/T2T/HG002/assemblies/hg002v1.0.1.fasta.gz",
+    "v0.9": "https://s3-us-west-2.amazonaws.com/human-pangenomics/T2T/HG002/assemblies/hg002v0.9.fasta.gz",
+    "v0.7": "https://s3-us-west-2.amazonaws.com/human-pangenomics/T2T/scratch/HG002/assemblies/drafts/assembly.v0.7.fasta.gz",
+}
+
+rule download_vcf:
+    output:
+        join(OUTPUT_DIR, "data", "vcf", "{version}.vcf.gz")
+    params:
+        url=lambda wc: VCFS[wc.version]
+    shell:
+        """
+        wget {params.url} -O {output}
+        """
+
+rule convert_vcf_to_bed:
+    input:
+        rules.download_vcf.output
+    output:
+        os.path.join(OUTPUT_DIR, "data", "{version}_truth.bed")
+    shell:
+        """
+        zcat {input} | grep -v "#" | awk -v OFS="\\t" '{{
+            print $1, $2, $2 + length($4), $4, $5, $3
+        }}' 
+        """
+
+rule download_curated_asm:
+    output:
+        fa=join(OUTPUT_DIR, "data", "asm", "{version}.fa.gz"),
+        fai=join(OUTPUT_DIR, "data", "asm", "{version}.fa.gz.fai"),
+    params:
+        url_asm=lambda wc: ASSEMBLIES[wc.version]
+    shell:
+        """
+        wget {params.url_asm} -O {output.fa}
+        wget {params.url_asm}.fai -O {output.fai}
+        """
+
+
+config = {
+    "samples": [
+        {
+            "name": f"HG002_{version}",
+            "asm_fa": expand(rules.download_curated_asm.output.fa, version=version)[0],
+            "reads": HIFI
+        }
+        for version, data in ASSEMBLIES.items()
+    ],
+    "output_dir": OUTPUT_DIR,
+    "output_pileup": False,
+    "logs_dir": LOG_DIR,
+    "benchmarks_dir": BENCHMARK_DIR,
+    "threads_aln": 24,
+    "mem_aln": "50G",
+    "processes_nucflag": 12,
+    "threads_nucflag": 12,
+    "mem_nucflag": "50G",
+    # Filter unmapped, non-primary, and supplementary alignments.
+    "samtools_view_flag": 2308,
+}
+
+
+module NucFlagCurated:
+    snakefile:
+        "Snakemake-NucFlag/workflow/Snakefile"
+    config:
+        config
+
+
+use rule * from NucFlagCurated as versioned_*
+
+
+rule calculate_precision_recall:
+    input:
+        script="workflow/scripts/misasim/calculate_precision_recall.py",
+        chkpt=[rules.versioned_nucflag.input],
+    output:
+        summary=join(OUTPUT_DIR, "summary" "nucflag_{version}.tsv"),
+    params:
+        fglob_test=lambda wc: f"*{wc.version}*_misassemblies.bed",
+        fglob_truth=lambda wc: f"{wc.version}_truth.bed",
+        dtype="hifi",
+        output_dir=OUTPUT_DIR,
+        vcf_output_dir=OUTPUT_DIR,
+    conda:
+        "../../envs/misasim.yaml"
+    shell:
+        """
+        python {input.script} \
+        -a {params.output_dir} \
+        --glob_test "{params.fglob_test}" \
+        -b {params.vcf_output_dir} \
+        --glob_truth "{params.fglob_truth}" \
+        -d {params.dtype} > {output}
+        """
+
+rule all:
+    input:
+        rules.versioned_nucflag.input,
+        expand(rules.calculate_precision_recall.output, version=ASSEMBLIES.keys())
+    default_target:
+        True

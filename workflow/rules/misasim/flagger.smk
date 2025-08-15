@@ -1,4 +1,6 @@
+import json
 from os.path import join
+
 
 """
 {
@@ -13,6 +15,7 @@ from os.path import join
             Literal["asm_fa"]: str,
             Literal["bam"]: str,
             Literal["alpha"]: str,
+            Literal["bias_annot_dir"]: str,
         }
     ]
 }
@@ -22,7 +25,7 @@ OUTPUT_DIR = config["output_dir"]
 BENCHMARK_DIR = config["benchmarks_dir"]
 LOG_DIR = config["logs_dir"]
 THREADS = config.get("threads", 12)
-MEM = config.get("mem", "100GB")
+MEM = config.get("mem", "250GB")
 
 
 wildcard_constraints:
@@ -39,16 +42,40 @@ rule create_wg_bed:
         awk -v OFS="\\t" '{{ print $1, 0, $2 }}' {input.fai} > {output.bed}
         """
 
+rule make_annot_json:
+    input:
+        wg_bed=rules.create_wg_bed.output.bed,
+        annot_dir=lambda wc: SAMPLES[wc.sm].get("bias_annot_dir", []) 
+    output:
+        annot_json=join(OUTPUT_DIR, "{sm}_annot.json"),
+    run:
+        import os
+        import json
+        import glob
+
+        annot_beds = (
+            glob.glob(os.path.join(input.annot_dir, "*.bed"))
+            if input.annot_dir
+            else []
+        )
+        annot_map = {
+            os.path.splitext(os.path.basename(file))[0]: file
+            for file in annot_beds
+        }
+        annot_map["whole_genome"] = input.wg_bed
+
+        with open(output.annot_json, "wt") as fh:
+            json.dump(annot_map, fh, indent=4)
 
 rule bam_to_cov:
     input:
-        wg_bed=rules.create_wg_bed.output,
         bam=lambda wc: SAMPLES[wc.sm]["bam"],
+        annot_json=rules.make_annot_json.output
     output:
-        annot_json=join(OUTPUT_DIR, "{sm}_annot.json"),
         cov=join(OUTPUT_DIR, "{sm}.cov"),
     params:
         baseline_annotation="whole_genome",
+        run_bias_detection=lambda wc: "--runBiasDetection" if SAMPLES[wc.sm].get("bias_annot_dir") else ""
     log:
         join(LOG_DIR, "bam_to_cov_{sm}.log"),
     benchmark:
@@ -60,17 +87,12 @@ rule bam_to_cov:
     threads: THREADS
     shell:
         """
-        # Put the path to the whole-genome bed file in a json file
-        echo "{{" > {output.annot_json}
-        echo '"whole_genome": "{input.wg_bed}"' >> {output.annot_json}
-        echo "}}" >> {output.annot_json}
-
         # Convert bam to cov.gz with bam2cov program
         bam2cov --bam {input.bam} \
         --output {output.cov} \
-        --annotationJson {output.annot_json} \
+        --annotationJson {input.annot_json} \
         --threads {threads} \
-        --baselineAnnotation {params.baseline_annotation} &> {log}
+        --baselineAnnotation {params.baseline_annotation} {params.run_bias_detection} &> {log}
         """
 
 
