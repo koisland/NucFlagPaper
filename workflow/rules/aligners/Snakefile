@@ -1,4 +1,4 @@
-from os.path import join
+from os.path import join, dirname
 
 
 # * Generate misjoin case
@@ -18,7 +18,7 @@ SAMPLES = config["samples"]
 OUTPUT_DIR = config["output_dir"]
 LOG_DIR = config["logs_dir"]
 BENCHMARK_DIR = config["benchmarks_dir"]
-MISASIM_OUTPUT_DIR = config["misasim_output_dir"]
+MISASIM_OUTPUT = config["misasim_output"]
 ALL_MTYPES_SEEDED = config["seeded_mtypes"]
 
 
@@ -46,7 +46,7 @@ nf_config_mm2["samples"].extend(
     [
         {
             "name": f"{sm}_{cfg['mtype']}-{cfg['number']}-{cfg['length']}",
-            "asm_fa": join(MISASIM_OUTPUT_DIR, sm, f"{seed}.fa"),
+            "asm_fa": expand(MISASIM_OUTPUT.fa, sm=sm, seed=seed)[0],
             "reads": SAMPLES[sm]["reads"],
             "config": SAMPLES[sm]["config"],
         }
@@ -68,7 +68,7 @@ nf_config_wm2["samples"].extend(
     [
         {
             "name": f"{sm}_{cfg['mtype']}-{cfg['number']}-{cfg['length']}",
-            "asm_fa": join(MISASIM_OUTPUT_DIR, sm, f"{seed}.fa"),
+            "asm_fa": expand(MISASIM_OUTPUT.fa, sm=sm, seed=seed)[0],
             "reads": SAMPLES[sm]["reads"],
             "config": SAMPLES[sm]["config"],
         }
@@ -89,7 +89,7 @@ nf_config_pbmm2["samples"].extend(
     [
         {
             "name": f"{sm}_{cfg['mtype']}-{cfg['number']}-{cfg['length']}",
-            "asm_fa": join(MISASIM_OUTPUT_DIR, sm, f"{seed}.fa"),
+            "asm_fa": expand(MISASIM_OUTPUT.fa, sm=sm, seed=seed)[0],
             "reads": SAMPLES[sm]["reads"],
             "config": SAMPLES[sm]["config"],
         }
@@ -127,7 +127,9 @@ use rule * from NucFlag_mm2 as nf_mm2_*
 rule calculate_precision_recall:
     input:
         script="workflow/scripts/misasim/calculate_precision_recall.py",
+        mtype_dir=lambda wc: dirname(MISASIM_OUTPUT.bed).format(sm=wc.sm),
         chkpt=[
+            expand(MISASIM_OUTPUT, sm=SAMPLES.keys(), seed=ALL_MTYPES_SEEDED.keys()),
             rules.nf_pbmm2_nucflag.input,
             rules.nf_wm2_nucflag.input,
             rules.nf_mm2_nucflag.input,
@@ -136,10 +138,9 @@ rule calculate_precision_recall:
         summary=join(OUTPUT_DIR, "summary", "nucflag_{sm}.tsv"),
     params:
         fglob_test="*_misassemblies.bed",
-        fglob_truth=lambda wc: f"{wc.sm}/*.bed",
+        fglob_truth="*.bed",
         dtype=lambda wc: wc.sm.split("_", 1)[1],
         output_dir=OUTPUT_DIR,
-        sim_output_dir=MISASIM_OUTPUT_DIR,
     conda:
         "../../envs/misasim.yaml"
     shell:
@@ -147,7 +148,7 @@ rule calculate_precision_recall:
         python {input.script} \
         -a {params.output_dir} \
         --glob_test "{params.fglob_test}" \
-        -b {params.sim_output_dir} \
+        -b {input.mtype_dir} \
         --glob_truth "{params.fglob_truth}" \
         -d {params.dtype} > {output}
         """

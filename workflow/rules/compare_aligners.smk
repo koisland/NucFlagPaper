@@ -10,7 +10,7 @@ module AlignerComparison:
             "logs_dir": join(config["logs_dir"], "aligners"),
             "benchmarks_dir": join(config["benchmarks_dir"], "aligners"),
             "data": [v.path for v in DATA["HG002"].hifi.values()],
-            "misasim_output_dir": join(config["output_dir"], "misasim"),
+            "misasim_output": rules.sim_ms_generate_misassemblies.output,
             "seeded_mtypes": ALL_MTYPES_SEEDED,
         }
 
