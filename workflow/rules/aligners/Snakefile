@@ -100,19 +100,19 @@ nf_config_pbmm2["samples"].extend(
 
 module NucFlag_pbmm2:
     snakefile:
-        "Snakemake-NucFlag/workflow/Snakefile"
+        "../Snakemake-NucFlag/workflow/Snakefile"
     config:
         nf_config_pbmm2
 
 module NucFlag_wm2:
     snakefile:
-        "Snakemake-NucFlag/workflow/Snakefile"
+        "../Snakemake-NucFlag/workflow/Snakefile"
     config:
         nf_config_wm2
 
 module NucFlag_mm2:
     snakefile:
-        "Snakemake-NucFlag/workflow/Snakefile"
+        "../Snakemake-NucFlag/workflow/Snakefile"
     config:
         nf_config_mm2
 

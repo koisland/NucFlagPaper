@@ -78,7 +78,7 @@ config = {
 
 module NucFlagCurated:
     snakefile:
-        "Snakemake-NucFlag/workflow/Snakefile"
+        "../Snakemake-NucFlag/workflow/Snakefile"
     config:
         config
 

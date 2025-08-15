@@ -149,7 +149,7 @@ nf_config_base["samples"].extend(
 
 module NucFlag:
     snakefile:
-        "Snakemake-NucFlag/workflow/Snakefile"
+        "../Snakemake-NucFlag/workflow/Snakefile"
     config:
         nf_config_base
 
