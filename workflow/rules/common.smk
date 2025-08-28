@@ -1,3 +1,4 @@
+import re
 import hashlib
 from os.path import join, dirname, basename
 from typing import NamedTuple, Any
@@ -26,6 +27,7 @@ LOGS_DIR = config.get("logs_dir", "logs")
 BMKS_DIR = config.get("benchmarks_dir", "benchmarks")
 DATA_DIR = config.get("data_dir", "data")
 DATA_MANIFEST = config.get("data_manifest")
+RGX_DTYPE = re.compile(r"^(.*?)_(hifi|ont_r9|ont_r10)")
 
 
 def get_data_manifest(data_manifest: str, output_dir: str) -> DataInfo:
@@ -52,6 +54,7 @@ def get_data_manifest(data_manifest: str, output_dir: str) -> DataInfo:
             url_hashes.append(url_hash)
 
     return samples, dtypes, url_hashes, data
+
 
 def get_sample_misassembly_samples(
     data: defaultdict[str, DataSourceInfo]
@@ -92,3 +95,11 @@ def get_mtypes_w_seeds(
         for mtype in mtypes
         for length in lengths
     }
+
+
+def get_dtype(wc) -> str:
+    mtch = RGX_DTYPE.search(wc.sm)
+    if not mtch:
+        raise ValueError(f"{wc.sm} doesn't match regex ({RGX_DTYPE})")
+    sm, dtype = mtch.groups()
+    return dtype

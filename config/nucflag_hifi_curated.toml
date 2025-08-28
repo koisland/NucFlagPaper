@@ -21,9 +21,10 @@ ratio_het = 0.2
 
 [indel]
 n_zscores_high = 3.5
-min_ins_size = 2
-min_del_size = 2
+min_ins_size = 1
+min_del_size = 1
 ratio_indel = 0.5
+rolling_mean_window = 3
 
 [softclip]
 n_zscores_high = 3.5
@@ -34,10 +35,10 @@ window_size = 5_000
 min_grp_size = 100_000
 min_ident = 80.0
 
-# [repeat]
-# check_types = ["Misjoin", "Indel", "FalseDup"]
-# ratio_repeat = 0.5
-# bp_extend = 5
+[repeat]
+check_types = ["Misjoin", "Indel", "FalseDup"]
+ratio_repeat = 0.5
+bp_extend = 5
 
 [minimum_size]
 null = 1

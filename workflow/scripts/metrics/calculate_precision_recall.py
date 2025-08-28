@@ -39,7 +39,7 @@ def calculate_precision_recall(
     df_bed_misassemblies: pl.DataFrame,
     df_bed_ctrl: pl.DataFrame,
     df_bed_truth: pl.DataFrame,
-) -> tuple[float, float]:
+) -> tuple[float, float, pl.DataFrame]:
     # Create range where we liftover the control intervals to match new misassembled intervals
     itree_update_ranges: dict[str, intervaltree.IntervalTree] = {}
     for grp, df_grp in df_bed_truth.group_by("chrom"):
@@ -105,6 +105,7 @@ def calculate_precision_recall(
     true_positive = 0
     false_negative = 0
     itree_simulated_misassemblies = defaultdict(intervaltree.IntervalTree)
+    missing_rows = []
     for row in df_bed_truth.iter_rows(named=True):
         ovl_st, ovl_end = row["tst"] - 5, row["tend"] + 5
         ovl = itree_misassemblies[row["chrom"]].overlap(ovl_st, ovl_end)
@@ -114,6 +115,7 @@ def calculate_precision_recall(
             true_positive += 1
         else:
             false_negative += 1
+            missing_rows.append((row["chrom"], ovl_st, ovl_end, "false_negative"))
         itree_simulated_misassemblies[row["chrom"]].addi(
             row["tst"], row["tend"] + 1, row["name"]
         )
@@ -129,10 +131,14 @@ def calculate_precision_recall(
                 continue
             # Otherwise, is false positive
             # print(chrom, itv)
+            missing_rows.append((chrom, itv.begin, itv.end, "false_positive"))
             false_positive += 1
     precision = true_positive / (true_positive + false_positive)
 
-    return precision, recall
+    df_missing = pl.DataFrame(
+        missing_rows, orient="row", schema=["chrom", "st", "end", "type"]
+    )
+    return precision, recall, df_missing
 
 
 def read_files(fglob: str, expected_columns: tuple[str]) -> pl.DataFrame:
@@ -141,29 +147,35 @@ def read_files(fglob: str, expected_columns: tuple[str]) -> pl.DataFrame:
 
     for file in glob.glob(fglob):
         with open(file, "rt") as fh:
-            header = next(fh)
-            has_header = sniffer.has_header(header)
+            try:
+                header = next(fh)
+                has_header = sniffer.has_header(header)
+            except StopIteration:
+                has_header = False
 
         if has_header:
             skip_rows = 1
         else:
             skip_rows = 0
 
-        df = (
-            pl.read_csv(
-                file,
-                separator="\t",
-                skip_rows=skip_rows,
-                has_header=False,
-                new_columns=expected_columns,
-                columns=range(len(expected_columns)),
-                schema_overrides={"st": pl.Int64, "end": pl.Int64},
-                ignore_errors=True,
+        try:
+            df = (
+                pl.read_csv(
+                    file,
+                    separator="\t",
+                    skip_rows=skip_rows,
+                    has_header=False,
+                    new_columns=expected_columns,
+                    columns=range(len(expected_columns)),
+                    schema_overrides={"st": pl.Int64, "end": pl.Int64},
+                    ignore_errors=True,
+                )
+                .with_columns(fname=pl.lit(file))
+                .filter(~pl.col("st").is_null() & ~pl.col("end").is_null())
             )
-            .with_columns(fname=pl.lit(file))
-            .filter(~pl.col("st").is_null() & ~pl.col("end").is_null())
-        )
-        dfs.append(df)
+            dfs.append(df)
+        except pl.exceptions.NoDataError:
+            print(f"No calls in {file}.", file=sys.stderr)
 
     df = (
         pl.concat(dfs)
@@ -173,13 +185,12 @@ def read_files(fglob: str, expected_columns: tuple[str]) -> pl.DataFrame:
             mtype_num_len=pl.col("fname").str.extract_groups(RGX_MTYPE_NUM_LEN),
         )
         .unnest("downsample", "sm_dtype", "mtype_num_len")
-        .with_columns(is_control=pl.col("mtype").is_null())
-        .with_columns(
-            # Replace misspelling
-            mtype=pl.when(pl.col("mtype") == "false_dupe")
-            .then(pl.lit("false_duplication"))
-            .otherwise(pl.col("mtype"))
-        )
+    )
+    df = df.with_columns(is_control=pl.col("mtype").is_null()).with_columns(
+        # Replace misspelling
+        mtype=pl.when(pl.col("mtype") == "false_dupe")
+        .then(pl.lit("false_duplication"))
+        .otherwise(pl.col("mtype"))
     )
     return df
 
@@ -215,7 +226,7 @@ def read_truth_files(
 
         mtype = ",".join(unique_mtypes)
         num = ",".join(str(n) for n in numbers)
-        length = ",".join(str(l) for l in lengths)
+        length = ",".join(str(lt) for lt in lengths)
 
         df = df.with_columns(
             mtype=pl.lit(mtype),
@@ -259,19 +270,18 @@ def main():
         default=BED_TRUTH_COLS,
         help="Expected columns in misassembly truth file.",
     )
+    ap.add_argument(
+        "--output_dir_missed_calls",
+        default=None,
+        help="Output directory for missing calls.",
+    )
     args = ap.parse_args()
     dtype = args.dtype
 
     df_res = read_files(
         fglob=os.path.join(args.input_test_dir, args.glob_test),
         expected_columns=args.columns_test,
-    )
-
-    dfs_res = df_res.partition_by("is_control", as_dict=True, include_key=False)
-    assert len(dfs_res) == 2, (
-        "No control samples. Must have one or more cases with no mtype or downsampling."
-    )
-
+    ).filter(pl.col("dtype") == args.dtype)
     dfs_truth = read_truth_files(
         fglob_truth=os.path.join(args.input_truth_dir, args.glob_truth),
         expected_columns=args.columns_truth,
@@ -289,31 +299,49 @@ def main():
     ]
     print("\t".join(header))
 
-    df_test = dfs_res[(False,)].filter(pl.col("dtype") == dtype)
-    df_control = dfs_res[(True,)].filter(pl.col("dtype") == dtype)
-    for group, df_group_control in df_control.group_by(
-        ["sample", "downsample", "dtype"]
-    ):
+    output_dir_missed_calls = args.output_dir_missed_calls
+    os.makedirs(output_dir_missed_calls, exist_ok=True)
+
+    all_groups = df_res["sample", "downsample", "dtype"].unique()
+    for group in all_groups.iter_rows():
         sample, downsample, dtype = group
         if not downsample:
             is_downsampled = pl.col("downsample").is_null()
         else:
             is_downsampled = pl.col("downsample") == downsample
 
-        dfs_group_test = df_test.filter(
-            (pl.col("sample") == sample) & is_downsampled & (pl.col("dtype") == dtype)
+        dfs_group_test = df_res.filter(
+            (pl.col("sample") == sample)
+            & is_downsampled
+            & (pl.col("dtype") == dtype)
+            & ~pl.col("is_control")
         ).partition_by(["mtype", "num", "len"], as_dict=True)
 
+        df_group_control = df_res.filter(
+            (pl.col("sample") == sample)
+            & is_downsampled
+            & (pl.col("dtype") == dtype)
+            & pl.col("is_control")
+        )
         for mtype_group, df_groups_test_mtypes in dfs_group_test.items():
             df_mtype_truth = dfs_truth.get(mtype_group)
             if not isinstance(df_mtype_truth, pl.DataFrame):
                 print(f"Skipping {mtype_group}...", file=sys.stderr)
                 continue
-            res = calculate_precision_recall(
+            precision, recall, missing_calls = calculate_precision_recall(
                 df_groups_test_mtypes, df_group_control, df_mtype_truth
             )
 
-            row = [*group, *mtype_group, *res]
+            row = [*group, *mtype_group, precision, recall]
+            if output_dir_missed_calls:
+                output_path = os.path.join(
+                    output_dir_missed_calls,
+                    "_".join(e if e else "None" for e in [*group, *mtype_group])
+                    + ".tsv",
+                )
+                missing_calls.write_csv(
+                    output_path, separator="\t", include_header=True
+                )
             print("\t".join(str(elem) for elem in row))
 
 

@@ -32,7 +32,7 @@ rule run_inspector:
     params:
         datatype=lambda wc: SAMPLES[wc.sm]["datatype"],
         # Keep in params as if any core dump will trigger rerun.
-        inspector_dir="workflow/rules/misasim/Inspector",
+        inspector_dir="workflow/scripts/Inspector",
     log:
         abspath(join(LOG_DIR, "run_inspector_{sm}.log")),
     benchmark:
@@ -41,7 +41,7 @@ rule run_inspector:
         mem=MEM,
     threads: THREADS
     conda:
-        "../../envs/inspector.yaml"
+        "../envs/inspector.yaml"
     shell:
         """
         # https://github.com/Maggi-Chen/Inspector/issues/10
@@ -64,7 +64,7 @@ rule run_inspector:
         """
 
 
-# TODO: Be more lenient and only take significant calls for small_scale_errors
+# All calls are significant already.
 rule merge_calls:
     input:
         inspector_dir=rules.run_inspector.output,

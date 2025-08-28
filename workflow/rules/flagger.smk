@@ -1,5 +1,5 @@
 import json
-from os.path import join
+from os.path import join, dirname
 
 
 """
@@ -42,10 +42,11 @@ rule create_wg_bed:
         awk -v OFS="\\t" '{{ print $1, 0, $2 }}' {input.fai} > {output.bed}
         """
 
+
 rule make_annot_json:
     input:
         wg_bed=rules.create_wg_bed.output.bed,
-        annot_dir=lambda wc: SAMPLES[wc.sm].get("bias_annot_dir", []) 
+        annot_dir=lambda wc: SAMPLES[wc.sm].get("bias_annot_dir", []),
     output:
         annot_json=join(OUTPUT_DIR, "{sm}_annot.json"),
     run:
@@ -54,28 +55,28 @@ rule make_annot_json:
         import glob
 
         annot_beds = (
-            glob.glob(os.path.join(input.annot_dir, "*.bed"))
-            if input.annot_dir
-            else []
+            glob.glob(os.path.join(input.annot_dir, "*.bed")) if input.annot_dir else []
         )
         annot_map = {
-            os.path.splitext(os.path.basename(file))[0]: file
-            for file in annot_beds
+            os.path.splitext(os.path.basename(file))[0]: file for file in annot_beds
         }
         annot_map["whole_genome"] = input.wg_bed
 
         with open(output.annot_json, "wt") as fh:
             json.dump(annot_map, fh, indent=4)
 
+
 rule bam_to_cov:
     input:
         bam=lambda wc: SAMPLES[wc.sm]["bam"],
-        annot_json=rules.make_annot_json.output
+        annot_json=rules.make_annot_json.output,
     output:
         cov=join(OUTPUT_DIR, "{sm}.cov"),
     params:
         baseline_annotation="whole_genome",
-        run_bias_detection=lambda wc: "--runBiasDetection" if SAMPLES[wc.sm].get("bias_annot_dir") else ""
+        run_bias_detection=lambda wc: (
+            "--runBiasDetection" if SAMPLES[wc.sm].get("bias_annot_dir") else ""
+        ),
     log:
         join(LOG_DIR, "bam_to_cov_{sm}.log"),
     benchmark:
@@ -101,7 +102,7 @@ rule run_flagger:
         alpha=lambda wc: SAMPLES[wc.sm]["alpha"],
         cov=rules.bam_to_cov.output.cov,
     output:
-        output_dir=directory(os.path.join(OUTPUT_DIR, "{sm}")),
+        os.path.join(OUTPUT_DIR, "{sm}", "final_flagger_prediction.bed"),
     log:
         join(LOG_DIR, "run_flagger_{sm}.log"),
     benchmark:
@@ -110,13 +111,15 @@ rule run_flagger:
         mem=MEM,
     singularity:
         "docker://mobinasri/flagger:v1.1.0"
+    params:
+        output_dir=lambda wc, output: dirname(output[0]),
     threads: THREADS
     shell:
         """
-        mkdir -p {output.output_dir}
+        mkdir -p {params.output_dir}
         hmm_flagger \
             --input {input.cov} \
-            --outputDir {output.output_dir}  \
+            --outputDir {params.output_dir}  \
             --alphaTsv {input.alpha} \
             --labelNames Err,Dup,Hap,Col \
             --threads {threads} &> {log}

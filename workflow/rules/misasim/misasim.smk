@@ -24,19 +24,18 @@ wildcard_constraints:
 
 
 rule compile_misasim:
-    input:
-        src="workflow/rules/misasim/misasim",
     output:
         outbin=join(OUTPUT_DIR, "release", "misasim"),
     params:
         output_dir=lambda wc, output: dirname(dirname(str(output))),
+        src="workflow/scripts/misasim",
     log:
         join(LOG_DIR, "compile_misasim.log"),
     shell:
         """
         log_file=$(realpath {log})
         output_dir=$(realpath {params.output_dir})
-        cd {input}
+        cd {params.src}
         cargo build --release --target-dir ${{output_dir}} &> ${{log_file}}
         """
 

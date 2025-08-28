@@ -1,13 +1,13 @@
 [submodule "misasim/misasim"]
-	path = workflow/rules/misasim/misasim
+	path = workflow/scripts/misasim
 	url = https://github.com/logsdon-lab/misasim.git
 	ignore = "dirty"
 [submodule "flagger"]
-	path = workflow/rules/misasim/flagger
+	path = workflow/scripts/flagger
 	url = https://github.com/mobinasri/flagger.git
 	ignore = "dirty"
 [submodule "workflow/rules/misasim/Inspector"]
-	path = workflow/rules/misasim/Inspector
+	path = workflow/scripts/Inspector
 	url = https://github.com/Maggi-Chen/Inspector.git
 	ignore = "dirty"
 [submodule "workflow/rules/Snakemake-NucFlag"]

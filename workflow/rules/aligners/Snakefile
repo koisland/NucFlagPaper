@@ -1,6 +1,9 @@
 from os.path import join, dirname
 
 
+include: "../common.smk"
+
+
 # * Generate misjoin case
 # * Take all cases for non-downsampled hifi.
 # * Run multiple aligners:
@@ -40,7 +43,7 @@ nf_config_mm2 = {
     "logs_dir": join(LOG_DIR, "mm2"),
     "benchmarks_dir": join(BENCHMARK_DIR, "mm2"),
     "aligner": "minimap2",
-    "aligner_opts": "-y -a --eqx --cs -x lr:hqae"
+    "aligner_opts": "-y -a --eqx --cs -x lr:hqae",
 }
 nf_config_mm2["samples"].extend(
     [
@@ -62,7 +65,7 @@ nf_config_wm2 = {
     "logs_dir": join(LOG_DIR, "wm2"),
     "benchmarks_dir": join(BENCHMARK_DIR, "wm2"),
     "aligner": "winnowmap",
-    "aligner_opts": "-y -a --eqx --cs -x map-pb"
+    "aligner_opts": "-y -a --eqx --cs -x map-pb",
 }
 nf_config_wm2["samples"].extend(
     [
@@ -83,7 +86,7 @@ nf_config_pbmm2 = {
     "logs_dir": join(LOG_DIR, "pbmm2"),
     "benchmarks_dir": join(BENCHMARK_DIR, "pbmm2"),
     "aligner": "pbmm2",
-    "aligner_opts": "--log-level DEBUG --preset SUBREAD --min-length 5000"
+    "aligner_opts": "--log-level DEBUG --preset SUBREAD --min-length 5000",
 }
 nf_config_pbmm2["samples"].extend(
     [
@@ -98,11 +101,13 @@ nf_config_pbmm2["samples"].extend(
     ]
 )
 
+
 module NucFlag_pbmm2:
     snakefile:
         "../Snakemake-NucFlag/workflow/Snakefile"
     config:
         nf_config_pbmm2
+
 
 module NucFlag_wm2:
     snakefile:
@@ -110,36 +115,49 @@ module NucFlag_wm2:
     config:
         nf_config_wm2
 
+
 module NucFlag_mm2:
     snakefile:
         "../Snakemake-NucFlag/workflow/Snakefile"
     config:
         nf_config_mm2
 
+
 use rule * from NucFlag_pbmm2 as nf_pbmm2_*
 
+
 use rule * from NucFlag_wm2 as nf_wm2_*
+
 
 use rule * from NucFlag_mm2 as nf_mm2_*
 
 
+def nf_output(wc) -> str:
+    if wc.aligner == "mm2":
+        return rules.nf_mm2_nucflag.input
+    elif wc.aligner == "wm2":
+        return rules.nf_wm2_nucflag.input
+    else:
+        return rules.nf_pbmm2_nucflag.input
+
 
 rule calculate_precision_recall:
     input:
-        script="workflow/scripts/misasim/calculate_precision_recall.py",
+        script="workflow/scripts/metrics/calculate_precision_recall.py",
         mtype_dir=lambda wc: dirname(MISASIM_OUTPUT.bed).format(sm=wc.sm),
-        chkpt=[
-            expand(MISASIM_OUTPUT, sm=SAMPLES.keys(), seed=ALL_MTYPES_SEEDED.keys()),
-            rules.nf_pbmm2_nucflag.input,
-            rules.nf_wm2_nucflag.input,
-            rules.nf_mm2_nucflag.input,
+        chkpt=lambda wc: [
+            *expand(MISASIM_OUTPUT, sm=SAMPLES.keys(), seed=ALL_MTYPES_SEEDED.keys()),
+            *nf_output(wc),
         ],
     output:
-        summary=join(OUTPUT_DIR, "summary", "nucflag_{sm}.tsv"),
+        summary=join(OUTPUT_DIR, "summary", "nucflag_{sm}_{aligner}.tsv"),
+        missed_calls_dir=directory(
+            join(OUTPUT_DIR, "summary", "nucflag_{sm}_{aligner}_missed")
+        ),
     params:
-        fglob_test="*_misassemblies.bed",
+        fglob_test="{aligner}/*_misassemblies.bed",
         fglob_truth="*.bed",
-        dtype=lambda wc: wc.sm.split("_", 1)[1],
+        dtype=get_dtype,
         output_dir=OUTPUT_DIR,
     conda:
         "../../envs/misasim.yaml"
@@ -150,9 +168,15 @@ rule calculate_precision_recall:
         --glob_test "{params.fglob_test}" \
         -b {input.mtype_dir} \
         --glob_truth "{params.fglob_truth}" \
-        -d {params.dtype} > {output}
+        -d {params.dtype} \
+        --output_dir_missed_calls {output.missed_calls_dir} > {output.summary}
         """
+
 
 rule all:
     input:
-        expand(rules.calculate_precision_recall.output, sm=SAMPLES)
+        expand(
+            rules.calculate_precision_recall.output,
+            sm=SAMPLES,
+            aligner=["pbmm2", "wm2", "mm2"],
+        ),

@@ -2,39 +2,52 @@ import polars as pl
 import matplotlib.pyplot as plt
 from matplotlib.axes import Axes
 
+
 def plot(ax: Axes, df: pl.DataFrame, **kwargs) -> None:
     ax.plot(df["position"], df["first"], color="black", label="Coverage", **kwargs)
     ax.plot(df["position"], df["second"], color="red", label="Mismatch", **kwargs)
-    ax.plot(df["position"], df["indel"], color="purple", label="Insertion/deletion", **kwargs)
+    ax.plot(
+        df["position"],
+        df["indel"],
+        color="purple",
+        label="Insertion/deletion",
+        **kwargs,
+    )
     for spine in ax.spines:
         if spine == "top" or spine == "right":
             ax.spines[spine].set_visible(False)
+
 
 def data() -> pl.DataFrame:
     first = [9, 15, 12, 12, 11, 18, 20, 16, 11, 10]
     second = [0, 13, 1, 1, 1, 3, 5, 7, 6, 2]
     indel = [0, 2, 2, 2, 0, 1, 2, 8, 1, 2]
-    return pl.DataFrame({
-        "position": range(len(first)),
-        "first": first,
-        "second": second,
-        "indel": indel
-    })
+    return pl.DataFrame(
+        {
+            "position": range(len(first)),
+            "first": first,
+            "second": second,
+            "indel": indel,
+        }
+    )
+
 
 def data_dip() -> pl.DataFrame:
     first = [9, 15, 12, 12, 2, 18, 20, 16, 11, 10]
     second = [0, 13, 1, 1, 0, 3, 5, 7, 6, 2]
     indel = [0, 2, 2, 2, 1, 1, 2, 8, 1, 2]
-    return pl.DataFrame({
-        "position": range(len(first)),
-        "first": first,
-        "second": second,
-        "indel": indel
-    })
+    return pl.DataFrame(
+        {
+            "position": range(len(first)),
+            "first": first,
+            "second": second,
+            "indel": indel,
+        }
+    )
 
 
 def main():
-    dot_kwargs = dict(marker='o', markersize=3)
+    dot_kwargs = dict(marker="o", markersize=3)
     legend_kwargs = dict(bbox_to_anchor=(1, 0.5), loc="center left", frameon=False)
     df = data()
     df_filt = df.with_columns(
@@ -59,11 +72,13 @@ def main():
 
     fig.supxlabel("Position")
     fig.supylabel("Sequence read depth")
-    
+
     ax: Axes = axs[0]
     handles, labels = ax.get_legend_handles_labels()
     labels_handles = dict(zip(labels, handles))
-    fig.legend(handles=labels_handles.values(), labels=labels_handles.keys(), **legend_kwargs)
+    fig.legend(
+        handles=labels_handles.values(), labels=labels_handles.keys(), **legend_kwargs
+    )
 
     fig.savefig("before_after.png", bbox_inches="tight", dpi=600)
 
@@ -82,6 +97,7 @@ def main():
     fig.savefig("dip.png", bbox_inches="tight", dpi=600)
 
     # Peak-calling
+
 
 if __name__ == "__main__":
     raise SystemExit(main())

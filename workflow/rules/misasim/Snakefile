@@ -3,6 +3,9 @@ from os.path import join
 from collections import defaultdict
 
 
+include: "../common.smk"
+
+
 """
 {
     Literal["output_dir"]: str,
@@ -19,6 +22,7 @@ from collections import defaultdict
     }
 }
 """
+
 SAMPLES = config["samples"]
 
 OUTPUT_DIR = config["output_dir"]
@@ -94,7 +98,7 @@ module misasim:
                 sm: {
                     "fa": SAMPLES[sm]["asm_fa"],
                     "seed_opts": ALL_MTYPES_SEEDED,
-                    "group_by": SAMPLES[sm].get("group_by", r"^(.*?)$")
+                    "group_by": SAMPLES[sm].get("group_by", r"^(.*?)$"),
                 }
                 for sm in SAMPLES.keys()
             },
@@ -154,10 +158,7 @@ module NucFlag:
         nf_config_base
 
 
-nf_config_by_sm = { 
-    sm_cfg["name"]: sm_cfg
-    for sm_cfg in nf_config_base["samples"]
-}
+nf_config_by_sm = {sm_cfg["name"]: sm_cfg for sm_cfg in nf_config_base["samples"]}
 
 
 use rule * from NucFlag
@@ -165,8 +166,10 @@ use rule * from NucFlag
 
 rule create_tmp_bam:
     input:
-        bam=lambda wc: rules.aln_merge_read_asm_alignments.output.alignment.format(sm=wc.sm_cond),
-        fa=lambda wc: nf_config_by_sm[wc.sm_cond]["asm_fa"]
+        bam=lambda wc: rules.aln_merge_read_asm_alignments.output.alignment.format(
+            sm=wc.sm_cond
+        ),
+        fa=lambda wc: nf_config_by_sm[wc.sm_cond]["asm_fa"],
     output:
         bam=temp(join(NUCFLAG_OUTPUT_DIR, "{sm_cond}.tmp.bam")),
     conda:
@@ -199,7 +202,10 @@ flagger_config_base["samples"].extend(
         {
             "name": f"{sm}_{cfg['mtype']}-{cfg['number']}-{cfg['length']}",
             "asm_fa": join(MISASIM_OUTPUT_DIR, sm, f"{seed}.fa"),
-            "bam": expand(rules.create_tmp_bam.output, sm_cond=f"{sm}_{cfg['mtype']}-{cfg['number']}-{cfg['length']}"),
+            "bam": expand(
+                rules.create_tmp_bam.output,
+                sm_cond=f"{sm}_{cfg['mtype']}-{cfg['number']}-{cfg['length']}",
+            ),
             "alpha": SAMPLES[sm]["flagger_config"],
         }
         for sm in SAMPLES.keys()
@@ -227,7 +233,10 @@ flagger_config_base["samples"].extend(
         {
             "name": f"{sm}_{perc}_{cfg['mtype']}-{cfg['number']}-{cfg['length']}",
             "asm_fa": join(MISASIM_OUTPUT_DIR, sm, f"{seed}.fa"),
-            "bam": expand(rules.create_tmp_bam.output, sm_cond=f"{sm}_{perc}_{cfg['mtype']}-{cfg['number']}-{cfg['length']}"),
+            "bam": expand(
+                rules.create_tmp_bam.output,
+                sm_cond=f"{sm}_{perc}_{cfg['mtype']}-{cfg['number']}-{cfg['length']}",
+            ),
             "alpha": SAMPLES[sm]["flagger_config"],
         }
         for sm in SAMPLES.keys()
@@ -239,7 +248,7 @@ flagger_config_base["samples"].extend(
 
 module Flagger:
     snakefile:
-        "flagger.smk"
+        "../flagger.smk"
     config:
         flagger_config_base
 
@@ -268,7 +277,10 @@ inspector_config_base["samples"].extend(
         {
             "name": f"{sm}_{cfg['mtype']}-{cfg['number']}-{cfg['length']}",
             "asm_fa": join(MISASIM_OUTPUT_DIR, sm, f"{seed}.fa"),
-            "bam": expand(rules.create_tmp_bam.output, sm_cond=f"{sm}_{cfg['mtype']}-{cfg['number']}-{cfg['length']}"),
+            "bam": expand(
+                rules.create_tmp_bam.output,
+                sm_cond=f"{sm}_{cfg['mtype']}-{cfg['number']}-{cfg['length']}",
+            ),
             "datatype": "nanopore" if "ont" in sm else "hifi",
         }
         for sm in SAMPLES.keys()
@@ -296,7 +308,10 @@ inspector_config_base["samples"].extend(
         {
             "name": f"{sm}_{perc}_{cfg['mtype']}-{cfg['number']}-{cfg['length']}",
             "asm_fa": join(MISASIM_OUTPUT_DIR, sm, f"{seed}.fa"),
-            "bam": expand(rules.create_tmp_bam.output, sm_cond=f"{sm}_{perc}_{cfg['mtype']}-{cfg['number']}-{cfg['length']}"),
+            "bam": expand(
+                rules.create_tmp_bam.output,
+                sm_cond=f"{sm}_{perc}_{cfg['mtype']}-{cfg['number']}-{cfg['length']}",
+            ),
             "datatype": "nanopore" if "ont" in sm else "hifi",
         }
         for sm in SAMPLES.keys()
@@ -308,7 +323,7 @@ inspector_config_base["samples"].extend(
 
 module Inspector:
     snakefile:
-        "inspector.smk"
+        "../inspector.smk"
     config:
         inspector_config_base
 
@@ -318,14 +333,15 @@ use rule * from Inspector
 
 rule calculate_precision_recall:
     input:
-        script="workflow/scripts/misasim/calculate_precision_recall.py",
+        script="workflow/scripts/metrics/calculate_precision_recall.py",
         chkpt=[rules.nucflag.input, rules.ms_all.input],
     output:
         summary=join(SUMMARY_OUTPUT_DIR, "nucflag_{sm}.tsv"),
+        missed_calls_dir=directory(join(SUMMARY_OUTPUT_DIR, "nucflag_{sm}_missed")),
     params:
-        fglob_test="*_misassemblies.bed",
+        fglob_test=lambda wc: f"{wc.sm}*_misassemblies.bed",
         fglob_truth=lambda wc: f"{wc.sm}/*.bed",
-        dtype=lambda wc: wc.sm.split("_", 1)[1],
+        dtype=get_dtype,
         output_dir=NUCFLAG_OUTPUT_DIR,
         sim_output_dir=MISASIM_OUTPUT_DIR,
     conda:
@@ -337,41 +353,44 @@ rule calculate_precision_recall:
         --glob_test "{params.fglob_test}" \
         -b {params.sim_output_dir} \
         --glob_truth "{params.fglob_truth}" \
-        -d {params.dtype} > {output}
+        -d {params.dtype} \
+        --output_dir_missed_calls {output.missed_calls_dir} > {output.summary}
         """
 
 
 use rule calculate_precision_recall as calculate_precision_recall_inspector with:
     input:
-        script="workflow/scripts/misasim/calculate_precision_recall.py",
+        script="workflow/scripts/metrics/calculate_precision_recall.py",
         chkpt=[rules.inspector.input, rules.ms_all.input],
     output:
         summary=join(SUMMARY_OUTPUT_DIR, "inspector_{sm}.tsv"),
+        missed_calls_dir=directory(join(SUMMARY_OUTPUT_DIR, "inspector_{sm}_missed")),
     params:
-        fglob_test="*.bed",
+        fglob_test=lambda wc: f"{wc.sm}*.bed",
         fglob_truth=lambda wc: f"{wc.sm}/*.bed",
-        dtype=lambda wc: wc.sm.split("_", 1)[1],
+        dtype=get_dtype,
         output_dir=join("results", "misasim", "inspector"),
         sim_output_dir=MISASIM_OUTPUT_DIR,
 
 
 use rule calculate_precision_recall as calculate_precision_recall_flagger with:
     input:
-        script="workflow/scripts/misasim/calculate_precision_recall.py",
+        script="workflow/scripts/metrics/calculate_precision_recall.py",
         chkpt=rules.flagger.input,
     output:
         summary=join(SUMMARY_OUTPUT_DIR, "flagger_{sm}.tsv"),
+        missed_calls_dir=directory(join(SUMMARY_OUTPUT_DIR, "flagger_{sm}_missed")),
     params:
-        fglob_test="*/*.bed",
+        fglob_test=lambda wc: f"{wc.sm}*/*.bed",
         fglob_truth=lambda wc: f"{wc.sm}/*.bed",
-        dtype=lambda wc: wc.sm.split("_", 1)[1],
+        dtype=get_dtype,
         output_dir=join("results", "misasim", "flagger"),
         sim_output_dir=MISASIM_OUTPUT_DIR,
 
 
 rule plot_precision_recall:
     input:
-        script="workflow/scripts/misasim/plot_precision_recall.py",
+        script="workflow/scripts/metrics/plot_precision_recall.py",
         summaries=[
             rules.calculate_precision_recall.output,
             rules.calculate_precision_recall_inspector.output,
@@ -380,7 +399,7 @@ rule plot_precision_recall:
     output:
         directory(join(SUMMARY_OUTPUT_DIR, "{sm}")),
     params:
-        output_prefix=lambda wc, output: f"{output[0]}/"
+        output_prefix=lambda wc, output: f"{output[0]}/",
     conda:
         "../../envs/misasim.yaml"
     shell:

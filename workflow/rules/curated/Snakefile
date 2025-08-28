@@ -5,6 +5,8 @@ OUTPUT_DIR = config["output_dir"]
 BENCHMARK_DIR = config["benchmarks_dir"]
 LOG_DIR = config["logs_dir"]
 HIFI = config["hifi"]
+CONFIG = config["config"]
+FLAGGER_ALPHA = config["alpha"]
 
 
 VCFS = {
@@ -15,37 +17,40 @@ VCFS = {
 ASSEMBLIES = {
     "v1.0.1": "https://s3-us-west-2.amazonaws.com/human-pangenomics/T2T/HG002/assemblies/hg002v1.0.1.fasta.gz",
     "v0.9": "https://s3-us-west-2.amazonaws.com/human-pangenomics/T2T/HG002/assemblies/hg002v0.9.fasta.gz",
-    "v0.7": "https://s3-us-west-2.amazonaws.com/human-pangenomics/T2T/scratch/HG002/assemblies/drafts/assembly.v0.7.fasta.gz",
+    "v0.7": "https://s3-us-west-2.amazonaws.com/human-pangenomics/T2T/HG002/assemblies/hg002v0.7.fasta",
 }
+
 
 rule download_vcf:
     output:
-        join(OUTPUT_DIR, "data", "vcf", "{version}.vcf.gz")
+        join(OUTPUT_DIR, "data", "vcf", "{version}.vcf.gz"),
     params:
-        url=lambda wc: VCFS[wc.version]
+        url=lambda wc: VCFS[wc.version],
     shell:
         """
         wget {params.url} -O {output}
         """
 
+
 rule convert_vcf_to_bed:
     input:
-        rules.download_vcf.output
+        rules.download_vcf.output,
     output:
-        os.path.join(OUTPUT_DIR, "data", "{version}_truth.bed")
+        os.path.join(OUTPUT_DIR, "data", "{version}_truth.bed"),
     shell:
         """
-        zcat {input} | grep -v "#" | awk -v OFS="\\t" '{{
-            print $1, $2, $2 + length($4), $4, $5, $3
-        }}' 
+        zcat -f {input} | grep -v "#" | awk -v OFS="\\t" '{{
+            print $1, $2, $2 + length($4), $4"-"$5, 0, $3, $2, $2 + length($4), "0,0,0"
+        }}' > {output}
         """
+
 
 rule download_curated_asm:
     output:
         fa=join(OUTPUT_DIR, "data", "asm", "{version}.fa.gz"),
         fai=join(OUTPUT_DIR, "data", "asm", "{version}.fa.gz.fai"),
     params:
-        url_asm=lambda wc: ASSEMBLIES[wc.version]
+        url_asm=lambda wc: ASSEMBLIES[wc.version],
     shell:
         """
         wget {params.url_asm} -O {output.fa}
@@ -58,7 +63,8 @@ config = {
         {
             "name": f"HG002_{version}",
             "asm_fa": expand(rules.download_curated_asm.output.fa, version=version)[0],
-            "reads": HIFI
+            "reads": HIFI,
+            "config": CONFIG,
         }
         for version, data in ASSEMBLIES.items()
     ],
@@ -86,33 +92,107 @@ module NucFlagCurated:
 use rule * from NucFlagCurated as versioned_*
 
 
+flagger_config = {
+    "output_dir": join("results", "curated", "flagger"),
+    "benchmarks_dir": join("benchmarks", "curated", "flagger"),
+    "logs_dir": join("logs", "curated", "flagger"),
+    "samples": [
+        {
+            "name": f"HG002_{version}",
+            "asm_fa": expand(rules.download_curated_asm.output.fa, version=version)[0],
+            "bam": expand(
+                rules.versioned_aln_merge_read_asm_alignments.output.alignment,
+                sm=f"HG002_{version}",
+            ),
+            "alpha": FLAGGER_ALPHA,
+        }
+        for version, data in ASSEMBLIES.items()
+    ],
+}
+
+inspector_config = {
+    "output_dir": join("results", "curated", "inspector"),
+    "benchmarks_dir": join("benchmarks", "curated", "inspector"),
+    "logs_dir": join("logs", "curated", "inspector"),
+    "samples": [
+        {
+            "name": f"HG002_{version}",
+            "asm_fa": expand(rules.download_curated_asm.output.fa, version=version)[0],
+            "bam": expand(
+                rules.versioned_aln_merge_read_asm_alignments.output.alignment,
+                sm=f"HG002_{version}",
+            ),
+            "datatype": "hifi",
+        }
+        for version, data in ASSEMBLIES.items()
+    ],
+}
+
+
+module Inspector:
+    snakefile:
+        "../inspector.smk"
+    config:
+        inspector_config
+
+
+use rule * from Inspector as versioned_*
+
+
+module Flagger:
+    snakefile:
+        "../flagger.smk"
+    config:
+        flagger_config
+
+
+use rule * from Flagger as versioned_*
+
+
+def get_bed_files(wc):
+    if wc.tool == "nucflag":
+        return expand(
+            rules.versioned_check_asm_nucflag.output.misassemblies,
+            sm=f"HG002_{wc.version}",
+        )
+    elif wc.tool == "flagger":
+        return expand(rules.versioned_run_flagger.output, sm=f"HG002_{wc.version}")
+    elif wc.tool == "inspector":
+        return expand(rules.versioned_merge_calls.output, sm=f"HG002_{wc.version}")
+    else:
+        raise ValueError(f"Invalid tool. {wc.tool}")
+
+
 rule calculate_precision_recall:
     input:
-        script="workflow/scripts/misasim/calculate_precision_recall.py",
-        chkpt=[rules.versioned_nucflag.input],
+        script="workflow/scripts/metrics/calculate_precision_recall_curated.py",
+        test_bed=get_bed_files,
+        truth_bed=rules.convert_vcf_to_bed.output,
     output:
-        summary=join(OUTPUT_DIR, "summary" "nucflag_{version}.tsv"),
-    params:
-        fglob_test=lambda wc: f"*{wc.version}*_misassemblies.bed",
-        fglob_truth=lambda wc: f"{wc.version}_truth.bed",
-        dtype="hifi",
-        output_dir=OUTPUT_DIR,
-        vcf_output_dir=OUTPUT_DIR,
+        summary=join(OUTPUT_DIR, "summary", "{tool}_{version}.tsv"),
+        missed_calls_dir=directory(
+            join(OUTPUT_DIR, "summary", "{tool}_{version}_missed")
+        ),
     conda:
         "../../envs/misasim.yaml"
     shell:
         """
         python {input.script} \
-        -a {params.output_dir} \
-        --glob_test "{params.fglob_test}" \
-        -b {params.vcf_output_dir} \
-        --glob_truth "{params.fglob_truth}" \
-        -d {params.dtype} > {output}
+        -a {input.test_bed} \
+        -b {input.truth_bed} \
+        --output_dir_missed_calls {output.missed_calls_dir} > {output.summary}
         """
+
 
 rule all:
     input:
         rules.versioned_nucflag.input,
-        expand(rules.calculate_precision_recall.output, version=ASSEMBLIES.keys())
-    default_target:
-        True
+        rules.versioned_flagger.input,
+        rules.versioned_inspector.input,
+        expand(rules.convert_vcf_to_bed.output, version=ASSEMBLIES.keys()),
+        expand(
+            rules.calculate_precision_recall.output,
+            version=ASSEMBLIES.keys(),
+            tool=["flagger", "inspector", "nucflag"],
+        ),
+    default_target: True
