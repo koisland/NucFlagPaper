@@ -12,18 +12,18 @@ ratio_collapse = 1.5
 ratio_false_dup = 0.5
 
 [mapq]
-n_zscores_low = 1.0
+n_zscores_low = 1.5
 mapq_agg_fn = "Mean"
 
 [mismatch]
 n_zscores_high = 3.5
-ratio_het = 0.2
+ratio_het = 0.5
 
 [indel]
 n_zscores_high = 3.5
-min_ins_size = 2
-min_del_size = 2
-ratio_indel = 0.5
+min_ins_size = 1
+min_del_size = 1
+ratio_indel = 0.8
 
 [softclip]
 n_zscores_high = 3.5

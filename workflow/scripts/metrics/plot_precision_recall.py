@@ -24,14 +24,19 @@ def main():
     for file in args.infiles:
         method, sm, dtype = os.path.splitext(os.path.basename(file))[0].split("_", 2)
         dfs.append(
-            pl.read_csv(file, separator="\t").with_columns(method=pl.lit(method))
+            pl.read_csv(
+                file,
+                separator="\t",
+                schema_overrides={"downsample": pl.Float32},
+                null_values=["None"],
+            ).with_columns(method=pl.lit(method))
         )
 
     df = (
         pl.concat(dfs)
         .sort("method", "dtype", "mtype")
         .with_columns(
-            downsample=pl.when(pl.col("downsample") == "None")
+            downsample=pl.when(pl.col("downsample").is_null())
             .then(pl.lit("0.0"))
             .otherwise(pl.col("downsample"))
             .cast(pl.Float32)

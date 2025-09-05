@@ -59,7 +59,7 @@ nf_config_base = {
     "benchmarks_dir": NUCFLAG_BENCHMARK_DIR,
     "threads_aln": 24,
     "mem_aln": "50G",
-    "processes_nucflag": 12,
+    "processes_nucflag": 24,
     "threads_nucflag": 12,
     "mem_nucflag": "50G",
     # Filter unmapped, non-primary, and supplementary alignments.
@@ -392,14 +392,14 @@ rule plot_precision_recall:
     input:
         script="workflow/scripts/metrics/plot_precision_recall.py",
         summaries=[
-            rules.calculate_precision_recall.output,
-            rules.calculate_precision_recall_inspector.output,
-            rules.calculate_precision_recall_flagger.output,
+            rules.calculate_precision_recall.output.summary,
+            rules.calculate_precision_recall_inspector.output.summary,
+            rules.calculate_precision_recall_flagger.output.summary,
         ],
     output:
         directory(join(SUMMARY_OUTPUT_DIR, "{sm}")),
     params:
-        output_prefix=lambda wc, output: f"{output[0]}/",
+        output_prefix=lambda wc, output: f"{output[0]}",
     conda:
         "../../envs/misasim.yaml"
     shell:

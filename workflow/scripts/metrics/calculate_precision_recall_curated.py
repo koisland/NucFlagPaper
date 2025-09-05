@@ -92,15 +92,16 @@ def calculate_precision_recall(
     true_positive = 0
     false_negative = 0
     itree_simulated_misassemblies = defaultdict(intervaltree.IntervalTree)
-    missing_rows = []
+    rows = []
     for row in df_bed_truth.iter_rows(named=True):
         ovl_st, ovl_end = row["tst"] - 5, row["tend"] + 5
         ovl = itree_misassemblies[row["chrom"]].overlap(ovl_st, ovl_end)
         if ovl:
             true_positive += 1
+            rows.append((row["chrom"], ovl_st, ovl_end, "true_positive"))
         else:
             false_negative += 1
-            missing_rows.append((row["chrom"], ovl_st, ovl_end, "false_negative"))
+            rows.append((row["chrom"], ovl_st, ovl_end, "false_negative"))
         itree_simulated_misassemblies[row["chrom"]].addi(
             row["tst"], row["tend"] + 1, row["name"]
         )
@@ -115,13 +116,11 @@ def calculate_precision_recall(
             if itree.overlaps(itv):
                 continue
             # Otherwise, is false positive
-            missing_rows.append((chrom, itv.begin, itv.end, "false_positive"))
+            rows.append((chrom, itv.begin, itv.end, "false_positive"))
             false_positive += 1
     precision = true_positive / (true_positive + false_positive)
 
-    df_missing = pl.DataFrame(
-        missing_rows, orient="row", schema=["chrom", "st", "end", "type"]
-    )
+    df_missing = pl.DataFrame(rows, orient="row", schema=["chrom", "st", "end", "type"])
     return precision, recall, df_missing
 
 
