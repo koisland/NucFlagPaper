@@ -95,27 +95,27 @@ def main():
             ax.set_xlim(0, 2)
             ax.set_ylim(0, 2)
 
-            xlabel, ylabel = None, None
+            # xlabel, ylabel = None, None
 
-            if x == 0 and y == 0:
-                xlabel, ylabel = "0", "0"
-            elif x == 0:
-                xlabel = f"{y}"
-            elif y == 0:
-                ylabel = f"{x}"
+            # if x == 0 and y == 0:
+            #     xlabel, ylabel = "0", "0"
+            # elif x == 0:
+            #     xlabel = f"{y}"
+            # elif y == 0:
+            #     ylabel = f"{x}"
 
             # Minimize all ticks.
             ax.set_xticks([], [])
             ax.set_yticks([], [])
 
-            if xlabel:
-                # Top not bottom.
-                ax.xaxis.tick_top()
-                ax.set_xlabel(xlabel)
-                ax.xaxis.set_label_position("top")
-            if ylabel:
-                # Horizontal ylabel with padding starting at right of label.
-                ax.set_ylabel(ylabel, rotation=0, ha="right")
+            # if xlabel:
+            #     # Top not bottom.
+            #     ax.xaxis.tick_top()
+            #     ax.set_xlabel(xlabel, rotation=-90)
+            #     ax.xaxis.set_label_position("top")
+            # if ylabel:
+            #     # Horizontal ylabel with padding starting at right of label.
+            #     ax.set_ylabel(ylabel, rotation=270, va="top")
 
             if (x, y) in coord_diag:
                 ax.set_facecolor("red")
@@ -240,7 +240,7 @@ def main():
             continue
         print(start, end)
 
-    fig.savefig("test.png")
+    fig.savefig("bfs.png")
 
 
 if __name__ == "__main__":

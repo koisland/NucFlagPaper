@@ -36,7 +36,7 @@ cat \
 
 bedtools subtract \
     -a <(grep -v <(printf "chrEBV\nchrM\n") results/curated/data/asm/v1.0.1.fa.gz.fai | awk -v OFS="\t" '{ print $1, 0, $2}') \
-    -b /tmp/cytoBand.hg002v1.0.sorted.bed | awk -v OFS="\t" '{print $0, ".", "gneg"}' >> /tmp/cytoBand.hg002v1.0.sorted.bed
+    -b /tmp/cytoBand.hg002v1.0.sorted.bed | awk -v OFS="\t" '{print $0, ".", "none"}' >> /tmp/cytoBand.hg002v1.0.sorted.bed
 
 sort -k1,1 -k2,2n /tmp/cytoBand.hg002v1.0.sorted.bed > results/cytoBand.hg002v1.0.sorted.bed
 rm /tmp/cytoBand.hg002v1.0.sorted.bed

@@ -173,14 +173,13 @@ def main():
     print("\t".join(header))
 
     output_dir_missed_calls = args.output_dir_missed_calls
-    os.makedirs(output_dir_missed_calls, exist_ok=True)
-
     precision, recall, missing_calls = calculate_precision_recall(
         df_test, pl.DataFrame(schema=df_test.schema), dfs_truth
     )
 
     row = [precision, recall]
     if output_dir_missed_calls:
+        os.makedirs(output_dir_missed_calls, exist_ok=True)
         output_path = os.path.join(output_dir_missed_calls, "missed_calls.tsv")
         missing_calls.write_csv(output_path, separator="\t", include_header=True)
     print("\t".join(str(elem) for elem in row))

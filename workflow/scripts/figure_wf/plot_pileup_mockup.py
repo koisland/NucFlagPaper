@@ -1,6 +1,7 @@
 import polars as pl
 import matplotlib.pyplot as plt
 from matplotlib.axes import Axes
+from matplotlib.patches import Patch
 
 
 def plot(ax: Axes, df: pl.DataFrame, **kwargs) -> None:
@@ -92,7 +93,11 @@ def main():
     ax.set_yticks(yticks, labels=[str(tick) for tick in yticks])
     ax.set_xlabel("Position")
     ax.set_ylabel("Sequence read depth")
-    ax.legend(**legend_kwargs)
+    handles, labels = ax.get_legend_handles_labels()
+
+    handles.append(Patch(color="gray"))
+    labels.append("Simple Repeat")
+    ax.legend(handles=handles, labels=labels, **legend_kwargs)
 
     fig.savefig("dip.png", bbox_inches="tight", dpi=600)
 
