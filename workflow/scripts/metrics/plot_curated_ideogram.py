@@ -21,7 +21,7 @@ CALL_NAMES = {
 }
 BAND_COLORS = pyid.BANDCOL | {"none": (1.0, 1.0, 1.0)}
 LBL_KWARGS = dict(rotation=0, ha="right", va="center")
-TOOL_NAMES = ["Truth", "NucFlag_v1.0", "Inspector_v1.3", "HMM_Flagger_v1.1.0"]
+TOOL_NAMES = ["Truth", "NucFlag v1.0", "Inspector v1.3", "HMM-Flagger v1.1.0"]
 TOOL_COLORS = ["black", "purple", "teal", "magenta"]
 
 
@@ -38,7 +38,7 @@ def main():
     ap.add_argument(
         "-f", "--fp", action="store_true", help='Include "false-positives".'
     )
-    ap.add_argument("-o", "--output_prefix", default="out", help="Output file.")
+    ap.add_argument("-o", "--output_prefix", default="ideogram", help="Output file.")
     args = ap.parse_args()
 
     cytobands = pyid.dataloader.load_cytobands(
@@ -127,11 +127,9 @@ def main():
             colors=[CALL_COLOR_KEY[typ] for typ in type_counts.keys()],
             radius=1.0,
             autopct=lambda pct: func(pct, dfs_calls[0].shape[0]),
-            textprops=dict(color="w", fontsize="small"),
+            textprops=dict(color="w", fontsize=12),
         )
-        ax_overview.set_ylabel(
-            tool, color=color, rotation=0, ha="right", fontsize="xx-large"
-        )
+        ax_overview.set_ylabel(tool, color=color, rotation=0, ha="right", fontsize=20)
 
     fig_overview.legend(
         handles=[
@@ -143,7 +141,7 @@ def main():
         ncol=len(color_key),
         frameon=False,
         edgecolor="black",
-        fontsize="xx-large",
+        fontsize=20,
         handlelength=0.7,
         handleheight=0.7,
     )
@@ -272,8 +270,8 @@ def main():
             handleheight=0.7,
         )
     # Reduce white space between haps
-    outfile = f"{args.output_prefix}.png"
-    fig.savefig(outfile, bbox_inches="tight", dpi=600)
+    fig.savefig(f"{args.output_prefix}.png", bbox_inches="tight", dpi=600)
+    fig.savefig(f"{args.output_prefix}.pdf", bbox_inches="tight", dpi=600)
 
 
 if __name__ == "__main__":

@@ -4,6 +4,7 @@ bp_merge = 1
 bp_wg_window = 5_000_000
 bp_min_aln_length = 1
 ignore_boundaries = true
+merge_identical = true
 
 [cov]
 n_zscores_high = 4.0
@@ -43,6 +44,7 @@ min_ident = 80.0
 null = 1
 collapse = 500
 misjoin = 1
+mismatch = 1
 het_mismap = 1
 false_dup = 2
 softclip = 1

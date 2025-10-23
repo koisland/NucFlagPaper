@@ -243,29 +243,31 @@ def main():
     df_segdup_total.to_csv(f"segdup_{chrom}.tsv", sep="\t", index=True)
     fig_segdup.savefig(f"segdup_{chrom}.png", bbox_inches="tight")
 
-    fig, ax = plt.subplots(figsize=(16, 3))
+    fig, ax = plt.subplots(figsize=(4, 4))
     df_misassemblies_total = (
         df_misassemblies.group_by(["name"])
-        .agg(length=(pl.col("end") - pl.col("st")).sum(), region=pl.lit("All regions"))
+        .agg(length=(pl.col("end") - pl.col("st")).sum())
         .sort(by="length")
-        .pivot(index="region", on="name", values="length")
-        .to_pandas()
-        .set_index("region")
     )
-    sns.heatmap(
+
+    plot_bar = sns.barplot(
         df_misassemblies_total,
+        x="name",
+        y="length",
         ax=ax,
-        annot=True,
-        linewidth=0.5,
-        fmt=",.0f",
-        cmap="mako",
     )
-    ax.set_ylabel(None)
-    ax.set_xlabel("NucFlag misassembly")
+    for container in plot_bar.containers:
+        ax.bar_label(container, fmt=lambda v: f"{v:,.0f}")
+
+    for spine in ["top", "right"]:
+        ax.spines[spine].set_visible(False)
+
+    ax.set_ylabel("Length (bp)")
+    ax.set_xlabel(None)
     ax.set_xticklabels(
         ax.get_xticklabels(), rotation=45, ha="right", rotation_mode="anchor"
     )
-    df_misassemblies_total.to_csv(f"all_{chrom}.tsv", sep="\t", index=True)
+    df_misassemblies_total.write_csv(f"all_{chrom}.tsv", separator="\t")
     fig.savefig(f"all_{chrom}.png", bbox_inches="tight")
 
 

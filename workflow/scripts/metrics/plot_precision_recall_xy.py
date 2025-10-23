@@ -14,20 +14,21 @@ DF_READ_DEPTH = pl.DataFrame(
     }
 )
 TOOL_VERSIONS = {
-    "flagger": "HMM_Flagger_v1.1.0",
-    "nucflag": "NucFlag_v1.0.0",
-    "inspector": "Inspector_v1.3",
+    "nucflag": "NucFlag v1.0.0",
+    "inspector": "Inspector v1.3",
+    "flagger": "HMM-Flagger v1.1.0",
 }
 TOOL_COLORS = {
-    "NucFlag_v1.0.0": "purple",
-    "Inspector_v1.3": "teal",
-    "HMM_Flagger_v1.1.0": "magenta",
+    "NucFlag v1.0.0": "purple",
+    "Inspector v1.3": "teal",
+    "HMM-Flagger v1.1.0": "magenta",
 }
 MISASSEMBLY_NAMES = {
     "misjoin": "Misjoin",
     "false_duplication": "False Duplication",
     "inversion": "Inversion",
 }
+DTYPE_NAMES = {"hifi": "PacBio HiFi", "ont_r10": "ONT (R10)"}
 
 
 def main():
@@ -131,6 +132,7 @@ def main():
                         palette=TOOL_COLORS,
                         ax=ax,
                         # Reverse order.
+                        hue_order=TOOL_COLORS.keys(),
                         order=df_dtype[var].unique().sort(descending=True),
                     )
 
@@ -149,7 +151,7 @@ def main():
 
                 if col == 0:
                     ax.set_ylabel(
-                        f"{metric.capitalize()} (%)\n({dtype})",
+                        f"{metric.capitalize()} (%)\n({DTYPE_NAMES[dtype]})",
                         rotation=0,
                         ha="right",
                         ma="center",

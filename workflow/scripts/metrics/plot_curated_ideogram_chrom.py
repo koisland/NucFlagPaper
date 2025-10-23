@@ -19,8 +19,8 @@ CALL_NAMES = {
     "true_positive": "True Positive",
     "false_negative": "False Negative",
 }
-LBL_KWARGS = dict(rotation=0, ha="right", va="center", fontsize="x-small")
-TOOL_NAMES = ["Truth", "NucFlag_v1.0", "Inspector_v1.3", "HMM_Flagger_v1.1.0"]
+LBL_KWARGS = dict(rotation=0, ha="right", va="center", fontsize="medium")
+TOOL_NAMES = ["Truth", "NucFlag v1.0", "Inspector v1.3", "HMM-Flagger v1.1.0"]
 TOOL_COLORS = ["black", "purple", "teal", "magenta"]
 SEGDUP_ORDERING = (
     r"Less than 90% similarity",
@@ -222,9 +222,9 @@ def main():
     idx_chrom = 0
     idx_censat = 1
     idx_segdup = 2
-    idx_legend = 7
-    idx_censat_legend = 8
-    idx_segdup_legend = 9
+    idx_censat_legend = 7
+    idx_segdup_legend = 8
+    idx_legend = 9
     ax: Axes = axes[idx_chrom]
 
     ax.xaxis.set_tick_params(which="both", length=0, labelleft=False)
@@ -272,9 +272,9 @@ def main():
             )
 
     for ax_ref, i in (
-        (None, idx_legend),
         (ax_censat, idx_censat_legend),
         (ax_segdup, idx_segdup_legend),
+        (None, idx_legend),
     ):
         if ax_ref:
             handles, labels = ax_ref.get_legend_handles_labels()
