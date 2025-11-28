@@ -2,6 +2,7 @@ include: "../common.smk"
 
 
 OUTPUT_DIR = config["output_dir"]
+IDEOGRAM_OUTPUT_DIR = join(OUTPUT_DIR, "ideogram")
 BENCHMARK_DIR = config["benchmarks_dir"]
 LOG_DIR = config["logs_dir"]
 HIFI = config["hifi"]
@@ -19,6 +20,15 @@ ASSEMBLIES = {
     "v0.9": "https://s3-us-west-2.amazonaws.com/human-pangenomics/T2T/HG002/assemblies/hg002v0.9.fasta.gz",
     "v0.7": "https://s3-us-west-2.amazonaws.com/human-pangenomics/T2T/HG002/assemblies/hg002v0.7.fasta",
 }
+ANNOTATIONS_V101 = [
+    "https://s3-us-west-2.amazonaws.com/human-pangenomics/T2T/HG002/assemblies/annotation/segdups/HG002.SDs.010624.45col.bb",
+    "https://s3-us-west-2.amazonaws.com/human-pangenomics/T2T/HG002/assemblies/annotation/centromere/hg002v1.0.1_v2.0/hg002v1.0.1.cenSatv2.0.noheader.bb",
+    "https://42basepairs.com/download/s3/human-pangenomics/T2T/HG002/assemblies/annotation/cytoband/cytoBand.hg002v1.0.bb",
+]
+
+
+wildcard_constraints:
+    version="|".join(ASSEMBLIES.keys()),
 
 
 rule download_vcf:
@@ -69,6 +79,7 @@ config = {
         for version, data in ASSEMBLIES.items()
     ],
     "output_dir": OUTPUT_DIR,
+    "output_plots": False,
     "output_pileup": False,
     "logs_dir": LOG_DIR,
     "benchmarks_dir": BENCHMARK_DIR,
@@ -100,9 +111,8 @@ flagger_config = {
         {
             "name": f"HG002_{version}",
             "asm_fa": expand(rules.download_curated_asm.output.fa, version=version)[0],
-            "bam": expand(
-                rules.versioned_aln_merge_read_asm_alignments.output.alignment,
-                sm=f"HG002_{version}",
+            "bam": rules.versioned_aln_merge_read_asm_alignments.output.alignment.format(
+                sm=f"HG002_{version}"
             ),
             "alpha": FLAGGER_ALPHA,
         }
@@ -118,8 +128,7 @@ inspector_config = {
         {
             "name": f"HG002_{version}",
             "asm_fa": expand(rules.download_curated_asm.output.fa, version=version)[0],
-            "bam": expand(
-                rules.versioned_aln_merge_read_asm_alignments.output.alignment,
+            "bam": rules.versioned_aln_merge_read_asm_alignments.output.alignment.format(
                 sm=f"HG002_{version}",
             ),
             "datatype": "hifi",
@@ -184,6 +193,9 @@ rule calculate_precision_recall:
         """
 
 
+include: "generate_ideogram.smk"
+
+
 rule all:
     input:
         rules.versioned_nucflag.input,
@@ -195,4 +207,5 @@ rule all:
             version=ASSEMBLIES.keys(),
             tool=["flagger", "inspector", "nucflag"],
         ),
+        rules.generate_ideogram.input,
     default_target: True

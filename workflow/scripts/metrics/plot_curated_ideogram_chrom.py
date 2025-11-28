@@ -9,13 +9,13 @@ from matplotlib.colors import rgb2hex
 
 CALL_COLOR_KEY = {
     "truth": "black",
-    "unclear": "gray",
+    "false_positive": "gray",
     "true_positive": "blue",
     "false_negative": "red",
 }
 CALL_NAMES = {
     "truth": "Truth",
-    "unclear": "Unclear",
+    "false_positive": "Unclear",
     "true_positive": "True Positive",
     "false_negative": "False Negative",
 }
@@ -99,6 +99,13 @@ def rgb_to_hex(srs: pl.Series) -> pl.Series:
 
 def main():
     ap = argparse.ArgumentParser()
+    ap.add_argument("--cytobands")
+    ap.add_argument("--truth")
+    ap.add_argument("--nucflag")
+    ap.add_argument("--flagger")
+    ap.add_argument("--inspector")
+    ap.add_argument("--segdups")
+    ap.add_argument("--censat")
     ap.add_argument("-o", "--outfile", default="out.png", help="Output file.")
     ap.add_argument(
         "-f", "--fp", action="store_true", help='Include "false-positives".'
@@ -106,12 +113,10 @@ def main():
     ap.add_argument("-c", "--chrom", help="Chromosome name.", default="chrY_PATERNAL")
     args = ap.parse_args()
 
-    cytobands = pyid.dataloader.load_cytobands(
-        "/project/logsdon_shared/projects/Keith/NucFlagPaper/results/cytoBand.hg002v1.0.sorted.bed"
-    )
+    cytobands = pyid.dataloader.load_cytobands(args.cytobands)
     dfs_calls = [
         pl.read_csv(
-            "/project/logsdon_shared/projects/Keith/NucFlagPaper/results/curated/data/v1.0.1_truth.bed",
+            args.truth,
             separator="\t",
             columns=[0, 1, 2, 3],
             new_columns=["chrom", "st", "end", "patch"],
@@ -119,15 +124,15 @@ def main():
         .with_columns(type=pl.lit("truth"))
         .filter(pl.col("chrom") == args.chrom),
         pl.read_csv(
-            "/project/logsdon_shared/projects/Keith/NucFlagPaper/results/curated/summary/nucflag_v1.0.1_missed/missed_calls.tsv",
+            args.nucflag,
             separator="\t",
         ).filter(pl.col("chrom") == args.chrom),
         pl.read_csv(
-            "/project/logsdon_shared/projects/Keith/NucFlagPaper/results/curated/summary/inspector_v1.0.1_missed/missed_calls.tsv",
+            args.inspector,
             separator="\t",
         ).filter(pl.col("chrom") == args.chrom),
         pl.read_csv(
-            "/project/logsdon_shared/projects/Keith/NucFlagPaper/results/curated/summary/flagger_v1.0.1_missed/missed_calls.tsv",
+            args.flagger,
             separator="\t",
         ).filter(pl.col("chrom") == args.chrom),
     ]
@@ -151,7 +156,7 @@ def main():
 
     df_segdup = (
         pl.read_csv(
-            "/project/logsdon_shared/projects/Keith/NucFlagPaper/results/HG002.SDs.010624.45col.bed",
+            args.segdups,
             separator="\t",
             has_header=False,
             columns=[*range(0, 9), 35],
@@ -185,7 +190,7 @@ def main():
     )
     df_censat = (
         pl.read_csv(
-            "/project/logsdon_shared/projects/Keith/NucFlagPaper/results/hg002v1.0.1.cenSatv2.0.noheader.bed",
+            args.censat,
             separator="\t",
             has_header=False,
             new_columns=[

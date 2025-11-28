@@ -23,7 +23,7 @@ DEFAULT_READ_CSV_PARAMS = dict(
     has_header=False,
     truncate_ragged_lines=True,
 )
-GOOD_MTYPES = {"good", "Hap"}
+GOOD_MTYPES = {"correct", "good", "Hap"}
 
 
 def calculate_precision_recall(
@@ -161,6 +161,7 @@ def main():
         args.input_test_bed,
         separator="\t",
         has_header=False,
+        comment_prefix="#",
         new_columns=args.columns_test,
     ).filter(~pl.col("name").is_in(GOOD_MTYPES))
     dfs_truth = pl.read_csv(

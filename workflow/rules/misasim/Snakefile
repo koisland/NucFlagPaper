@@ -54,6 +54,7 @@ wildcard_constraints:
 nf_config_base = {
     "samples": [{"name": sm, **cfg} for sm, cfg in SAMPLES.items()],
     "output_dir": NUCFLAG_OUTPUT_DIR,
+    "output_plots": False,
     "output_pileup": False,
     "logs_dir": NUCFLAG_LOG_DIR,
     "benchmarks_dir": NUCFLAG_BENCHMARK_DIR,

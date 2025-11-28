@@ -20,7 +20,7 @@ BED_TRUTH_COLS = (
     "tend",
     "item_rgb",
 )
-GOOD_MTYPES = {"good", "Hap"}
+GOOD_MTYPES = {"correct", "good", "Hap"}
 
 RGX_DOWNSAMPLE = r"(?<downsample>0\.33|0\.5)"
 RGX_SM_DTYPE = r"(?<sample>[^/]*?)_(?<dtype>hifi|ont_r10|ont_r9)"
@@ -78,6 +78,7 @@ def calculate_precision_recall(
         if ovl:
             final_itv: intervaltree.Interval = max(ovl, key=lambda x: x.data[0])
             bp_adj, mtype = final_itv.data
+            # Is simulated intervals.
             if mtype == "misjoin":
                 bp_adj = -bp_adj
             elif mtype == "false_duplication":
@@ -166,6 +167,7 @@ def read_files(fglob: str, expected_columns: tuple[str]) -> pl.DataFrame:
                     skip_rows=skip_rows,
                     has_header=False,
                     new_columns=expected_columns,
+                    comment_prefix="#",
                     columns=range(len(expected_columns)),
                     schema_overrides={"st": pl.Int64, "end": pl.Int64},
                     ignore_errors=True,
@@ -204,7 +206,11 @@ def read_truth_files(
         # seed, _ = os.path.splitext(os.path.basename(file))
         df = (
             pl.read_csv(
-                file, separator="\t", has_header=False, new_columns=expected_columns
+                file,
+                separator="\t",
+                has_header=False,
+                new_columns=expected_columns,
+                comment_prefix="#",
             )
             .with_columns(
                 # Replace misspelling

@@ -35,32 +35,38 @@ def minimize_ax(ax: Axes, *, remove_ticks: bool = False):
 
 def main():
     ap = argparse.ArgumentParser()
+    ap.add_argument("--cytobands")
+    ap.add_argument("--fai")
+    ap.add_argument("--truth")
+    ap.add_argument("--nucflag")
+    ap.add_argument("--flagger")
+    ap.add_argument("--inspector")
+    ap.add_argument("--segdups")
+    ap.add_argument("--censat")
     ap.add_argument(
         "-f", "--fp", action="store_true", help='Include "false-positives".'
     )
     ap.add_argument("-o", "--output_prefix", default="ideogram", help="Output file.")
     args = ap.parse_args()
 
-    cytobands = pyid.dataloader.load_cytobands(
-        "/project/logsdon_shared/projects/Keith/NucFlagPaper/results/cytoBand.hg002v1.0.sorted.bed"
-    )
+    cytobands = pyid.dataloader.load_cytobands(args.cytobands)
     dfs_calls = [
         pl.read_csv(
-            "/project/logsdon_shared/projects/Keith/NucFlagPaper/results/curated/data/v1.0.1_truth.bed",
+            args.truth,
             separator="\t",
             columns=[0, 1, 2, 3],
             new_columns=["chrom", "st", "end", "patch"],
         ).with_columns(type=pl.lit("truth")),
         pl.read_csv(
-            "/project/logsdon_shared/projects/Keith/NucFlagPaper/results/curated/summary/nucflag_v1.0.1_missed/missed_calls.tsv",
+            args.nucflag,
             separator="\t",
         ),
         pl.read_csv(
-            "/project/logsdon_shared/projects/Keith/NucFlagPaper/results/curated/summary/inspector_v1.0.1_missed/missed_calls.tsv",
+            args.inspector,
             separator="\t",
         ),
         pl.read_csv(
-            "/project/logsdon_shared/projects/Keith/NucFlagPaper/results/curated/summary/flagger_v1.0.1_missed/missed_calls.tsv",
+            args.flagger,
             separator="\t",
         ),
     ]
@@ -83,7 +89,7 @@ def main():
 
     df_fai = (
         pl.read_csv(
-            "results/curated/data/asm/v1.0.1.fa.gz.fai",
+            args.fai,
             separator="\t",
             columns=[0, 1],
             new_columns=["chrom", "length"],

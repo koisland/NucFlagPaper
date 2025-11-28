@@ -27,6 +27,7 @@ ALL_MTYPES_SEEDED = config["seeded_mtypes"]
 
 nf_config_base = {
     "samples": [{"name": sm, **cfg} for sm, cfg in SAMPLES.items()],
+    "output_plots": False,
     "output_pileup": False,
     "threads_aln": 24,
     "mem_aln": "50G",

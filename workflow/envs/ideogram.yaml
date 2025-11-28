@@ -1,0 +1,14 @@
+channels:
+  - conda-forge
+  - bioconda
+dependencies:
+  - python==3.12
+  - pip
+  - bedtools
+  - bigtools
+  - pip:
+    - polars
+    - seaborn
+    - matplotlib
+    - intervaltree
+    - pyideogram
