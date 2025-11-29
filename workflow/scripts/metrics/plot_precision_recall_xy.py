@@ -76,18 +76,22 @@ def main():
     )
     remove_spines = ["top", "right"]
     dtype_order = ["hifi", "ont_r10"]
+    rank_dtype_order = {v: i for i, v in enumerate(dtype_order)}
     misassembly_order = ["misjoin", "inversion", "false_duplication"]
     for var, xlabel in (("len", "Length (bp)"), ("coverage", "Read depth (X)")):
         dfs_dtype = df.sort(var).partition_by(["dtype", "Misassembly"], as_dict=True)
-
+        dtypes, _ = tuple(zip(*dfs_dtype.keys()))
+        dtype_order = sorted(
+            set(dtype_order).intersection(dtypes), key=lambda v: rank_dtype_order[v]
+        )
         for metric in ("precision", "recall"):
             fig, axes = plt.subplots(
-                nrows=2,
+                nrows=len(dtype_order),
                 ncols=3,
                 sharex=var == "len",
                 layout="constrained",
-                figsize=(16, 8),
-                height_ratios=[0.5, 0.5],
+                figsize=(16, 4 * len(dtype_order)),
+                height_ratios=[0.5] * len(dtype_order),
             )
             labels_handles = {}
             facet_order = [
@@ -103,7 +107,10 @@ def main():
                 if not isinstance(df_dtype, pl.DataFrame):
                     continue
 
-                ax: Axes = axes[row, col]
+                try:
+                    ax: Axes = axes[row, col]
+                except IndexError:
+                    ax = axes[col]
 
                 ax.set_ylim(0.0, 100.0)
                 ax.set_xlim(df_dtype[var].min(), df_dtype[var].max())

@@ -161,7 +161,7 @@ rule calculate_precision_recall:
         dtype=get_dtype,
         output_dir=OUTPUT_DIR,
     conda:
-        "../../envs/misasim.yaml"
+        "../../envs/tools.yaml"
     shell:
         """
         python {input.script} \
@@ -174,6 +174,24 @@ rule calculate_precision_recall:
         """
 
 
+rule plot_precision_recall:
+    input:
+        script="workflow/scripts/metrics/plot_precision_recall_aligner.py",
+        summary=expand(
+            rules.calculate_precision_recall.output.summary,
+            sm=SAMPLES,
+            aligner=["pbmm2", "wm2", "mm2"],
+        ),
+    output:
+        plots=directory(join(OUTPUT_DIR, "summary", "plot")),
+    conda:
+        "../../envs/tools.yaml"
+    shell:
+        """
+        python {input.script} -i {input.summary} -o {output.plots}
+        """
+
+
 rule all:
     input:
         expand(
@@ -181,3 +199,4 @@ rule all:
             sm=SAMPLES,
             aligner=["pbmm2", "wm2", "mm2"],
         ),
+        rules.plot_precision_recall.output,

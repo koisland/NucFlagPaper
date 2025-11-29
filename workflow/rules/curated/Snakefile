@@ -183,7 +183,7 @@ rule calculate_precision_recall:
             join(OUTPUT_DIR, "summary", "{tool}_{version}_missed")
         ),
     conda:
-        "../../envs/misasim.yaml"
+        "../../envs/tools.yaml"
     shell:
         """
         python {input.script} \

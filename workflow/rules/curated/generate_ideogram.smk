@@ -7,6 +7,8 @@ rule download_annotation_data:
     params:
         output_dir=IDEOGRAM_OUTPUT_DIR,
         urls=" ".join(ANNOTATIONS_V101),
+    conda:
+        "../../envs/tools.yaml"
     shell:
         """
         for url in {params.urls}; do
@@ -26,6 +28,8 @@ rule convert_to_bed:
         segdups=join(IDEOGRAM_OUTPUT_DIR, "HG002.SDs.010624.45col.bed"),
         censat=join(IDEOGRAM_OUTPUT_DIR, "hg002v1.0.1.cenSatv2.0.noheader.bed"),
         cytoband=join(IDEOGRAM_OUTPUT_DIR, "cytoBand.hg002v1.0.bed"),
+    conda:
+        "../../envs/tools.yaml"
     shell:
         """
         bigbedtobed {input.segdups} {output.segdups}
@@ -43,6 +47,8 @@ rule format_cytoband:
         cytoband=join(IDEOGRAM_OUTPUT_DIR, "cytoBand.hg002v1.0.formatted.bed"),
     params:
         bp_merge=5_000_000,
+    conda:
+        "../../envs/tools.yaml"
     shell:
         """
         cat \
@@ -103,6 +109,8 @@ rule plot_ideogram:
             join(IDEOGRAM_OUTPUT_DIR, "ideogram_overview.png"),
             join(IDEOGRAM_OUTPUT_DIR, "ideogram.pdf"),
         ],
+    conda:
+        "../../envs/tools.yaml"
     params:
         output_prefix=lambda wc, output: os.path.splitext(output.plots[0])[0],
     shell:
@@ -153,6 +161,8 @@ rule plot_ideogram_chrom:
         censat=rules.convert_to_bed.output.censat,
     output:
         plot=join(IDEOGRAM_OUTPUT_DIR, "{chrom}.png"),
+    conda:
+        "../../envs/tools.yaml"
     shell:
         """
         python {input.script} \

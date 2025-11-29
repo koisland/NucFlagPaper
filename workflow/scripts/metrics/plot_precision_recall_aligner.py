@@ -16,11 +16,10 @@ def main():
         metavar="{method}_{sample}_{dtype}",
         help="Input summary files. Expects header.",
     )
-    ap.add_argument("-o", "--output_prefix", default="./", help="Output prefix.")
+    ap.add_argument("-o", "--output_dir", default=".", help="Output dir.")
 
     args = ap.parse_args()
-    output_prefix = args.output_prefix
-    output_dir = os.path.dirname(output_prefix)
+    output_dir = args.output_dir
     os.makedirs(output_dir, exist_ok=True)
 
     dfs = []
@@ -71,7 +70,7 @@ def main():
             ax.set_ylim(0, 1.0)
 
         g.set_axis_labels(label, "Precision (%)")
-        g.savefig(f"{output_prefix}precision_{var}.png")
+        g.savefig(f"{output_dir}/precision_{var}.png")
 
         g = sns.catplot(
             data=df,
@@ -90,7 +89,7 @@ def main():
             ax.set_ylim(0, 1.0)
 
         g.set_axis_labels(label, "Recall (%)")
-        g.savefig(f"{output_prefix}recall_{var}.png")
+        g.savefig(f"{output_dir}/recall_{var}.png")
 
 
 if __name__ == "__main__":

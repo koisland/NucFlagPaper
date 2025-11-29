@@ -78,7 +78,7 @@ rule downsample_reads:
     params:
         sample="{perc}",
     conda:
-        "../../envs/misasim.yaml"
+        "../../envs/tools.yaml"
     log:
         join(LOG_DIR, "downsample_reads_{sm}_{perc}.log"),
     shell:
@@ -174,7 +174,7 @@ rule create_tmp_bam:
     output:
         bam=temp(join(NUCFLAG_OUTPUT_DIR, "{sm_cond}.tmp.bam")),
     conda:
-        "../../envs/misasim.yaml"
+        "../../envs/tools.yaml"
     shell:
         """
         samtools view -T {input.fa} {input.bam} -o {output.bam}
@@ -346,7 +346,7 @@ rule calculate_precision_recall:
         output_dir=NUCFLAG_OUTPUT_DIR,
         sim_output_dir=MISASIM_OUTPUT_DIR,
     conda:
-        "../../envs/misasim.yaml"
+        "../../envs/tools.yaml"
     shell:
         """
         python {input.script} \
@@ -402,7 +402,27 @@ rule plot_precision_recall:
     params:
         output_prefix=lambda wc, output: f"{output[0]}",
     conda:
-        "../../envs/misasim.yaml"
+        "../../envs/tools.yaml"
+    shell:
+        """
+        python {input.script} -i {input.summaries} -o {params.output_prefix}/
+        """
+
+
+rule plot_precision_recall_xy:
+    input:
+        script="workflow/scripts/metrics/plot_precision_recall_xy.py",
+        summaries=[
+            rules.calculate_precision_recall.output.summary,
+            rules.calculate_precision_recall_inspector.output.summary,
+            rules.calculate_precision_recall_flagger.output.summary,
+        ],
+    output:
+        directory(join(SUMMARY_OUTPUT_DIR, "{sm}_xy")),
+    params:
+        output_prefix=lambda wc, output: f"{output[0]}",
+    conda:
+        "../../envs/tools.yaml"
     shell:
         """
         python {input.script} -i {input.summaries} -o {params.output_prefix}/
@@ -418,4 +438,5 @@ rule all:
         expand(rules.calculate_precision_recall_inspector.output, sm=SAMPLES),
         expand(rules.calculate_precision_recall_flagger.output, sm=SAMPLES),
         expand(rules.plot_precision_recall.output, sm=SAMPLES),
+        expand(rules.plot_precision_recall_xy.output, sm=SAMPLES),
     default_target: True

@@ -95,7 +95,7 @@ rule index_misassemblies_fa:
     output:
         idx=join(OUTPUT_DIR, "{sm}", "{seed}.fa.fai"),
     conda:
-        "../../envs/misasim.yaml"
+        "../../envs/tools.yaml"
     shell:
         """
         samtools faidx {input}
@@ -108,7 +108,7 @@ rule split_asm_misasim:
     output:
         join(OUTPUT_DIR, "{sm}", "{seed}_{hap}.fa"),
     conda:
-        "../../envs/misasim.yaml"
+        "../../envs/tools.yaml"
     shell:
         """
         samtools faidx {input.fa}

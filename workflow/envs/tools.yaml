@@ -4,6 +4,8 @@ channels:
 dependencies:
   - samtools
   - seqtk
+  - bedtools
+  - bigtools
   - python==3.12
   - pip
   - pip:
@@ -13,3 +15,5 @@ dependencies:
     - seaborn
     - matplotlib
     - intervaltree
+    - pyarrow
+    - pyideogram
