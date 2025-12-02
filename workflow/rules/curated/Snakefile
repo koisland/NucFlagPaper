@@ -3,6 +3,7 @@ include: "../common.smk"
 
 OUTPUT_DIR = config["output_dir"]
 IDEOGRAM_OUTPUT_DIR = join(OUTPUT_DIR, "ideogram")
+ELEMENT_OUTPUT_DIR = join(OUTPUT_DIR, "element")
 BENCHMARK_DIR = config["benchmarks_dir"]
 LOG_DIR = config["logs_dir"]
 HIFI = config["hifi"]
@@ -194,6 +195,7 @@ rule calculate_precision_recall:
 
 
 include: "generate_ideogram.smk"
+include: "validate_homopolymers.smk"
 
 
 rule all:

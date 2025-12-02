@@ -15,3 +15,7 @@
 	url = https://github.com/logsdon-lab/Snakemake-NucFlag.git
 	branch = feature/nucflag-v1.0
 	ignore = "dirty"
+[submodule "workflow/rules/assemble/Snakemake-Assembly"]
+	path = workflow/rules/assemble/Snakemake-Assembly
+	url = git@github.com:logsdon-lab/Snakemake-Assembly.git
+	ignore = "dirty"

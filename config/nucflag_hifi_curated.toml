@@ -24,7 +24,8 @@ ratio_het = 0.5
 n_zscores_high = 3.5
 min_ins_size = 1
 min_del_size = 1
-ratio_indel = 0.8
+ratio_insertion = 0.8
+ratio_deletion = 0.8
 
 [softclip]
 n_zscores_high = 3.5
@@ -36,7 +37,7 @@ min_grp_size = 100_000
 min_ident = 80.0
 
 [repeat]
-check_types = ["Misjoin", "Indel", "FalseDup"]
+check_types = ["Misjoin", "Insertion", "Deletion", "FalseDup"]
 ratio_repeat = 0.5
 bp_extend = 5
 
@@ -48,7 +49,8 @@ het_mismap = 1
 mismatch = 1
 false_dup = 2
 softclip = 1
-indel = 1
+insertion = 1
+deletion = 1
 homopolymer = 1
 dinucleotide = 1
 simple_repeat = 1
