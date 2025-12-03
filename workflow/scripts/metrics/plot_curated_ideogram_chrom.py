@@ -114,6 +114,10 @@ def main():
     args = ap.parse_args()
 
     cytobands = pyid.dataloader.load_cytobands(args.cytobands)
+    missed_calls_kwargs = dict(
+        comment_prefix="#",
+        separator="\t",
+    )
     dfs_calls = [
         pl.read_csv(
             args.truth,
@@ -123,18 +127,15 @@ def main():
         )
         .with_columns(type=pl.lit("truth"))
         .filter(pl.col("chrom") == args.chrom),
-        pl.read_csv(
-            args.nucflag,
-            separator="\t",
-        ).filter(pl.col("chrom") == args.chrom),
-        pl.read_csv(
-            args.inspector,
-            separator="\t",
-        ).filter(pl.col("chrom") == args.chrom),
-        pl.read_csv(
-            args.flagger,
-            separator="\t",
-        ).filter(pl.col("chrom") == args.chrom),
+        pl.read_csv(args.nucflag, **missed_calls_kwargs).filter(
+            pl.col("chrom") == args.chrom
+        ),
+        pl.read_csv(args.inspector, **missed_calls_kwargs).filter(
+            pl.col("chrom") == args.chrom
+        ),
+        pl.read_csv(args.flagger, **missed_calls_kwargs).filter(
+            pl.col("chrom") == args.chrom
+        ),
     ]
     if not args.fp:
         dfs_calls = [

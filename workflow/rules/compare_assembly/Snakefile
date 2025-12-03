@@ -1,0 +1,14 @@
+
+module DenovoAssembly:
+    snakefile:
+        "Snakemake-Assembly/workflow/Snakefile"
+    config:
+        config
+
+
+use rule * from DenovoAssembly as denovo_*
+
+
+# Then run NucFlag on each assembly
+# Generate ideogram for each.
+# Generate breakdown for each.

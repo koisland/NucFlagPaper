@@ -21,9 +21,21 @@ include: "rules/compare_aligners.smk"
 include: "rules/check_curated.smk"
 
 
+outputs = [
+    rules.download_all.input,
+    rules.sim_all.input,
+    rules.aln_cmp_all.input,
+    rules.hg002_curated_all.input,
+]
+
+# Data is not downloaded so must manually trigger.
+if config.get("assembly_config"):
+
+    include: "rules/compare_assembly.smk"
+
+    outputs.append(rules.cmp_asm_denovo_all.input)
+
+
 rule all:
     input:
-        rules.download_all.input,
-        rules.sim_all.input,
-        rules.aln_cmp_all.input,
-        rules.hg002_curated_all.input,
+        outputs,

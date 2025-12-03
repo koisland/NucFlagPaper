@@ -137,7 +137,7 @@ def calculate_precision_recall(
     precision = true_positive / (true_positive + false_positive)
 
     df_missing = pl.DataFrame(
-        missing_rows, orient="row", schema=["chrom", "st", "end", "type"]
+        missing_rows, orient="row", schema=["#chrom", "st", "end", "type"]
     )
     return precision, recall, df_missing
 
@@ -343,7 +343,7 @@ def main():
                 output_path = os.path.join(
                     output_dir_missed_calls,
                     "_".join(e if e else "None" for e in [*group, *mtype_group])
-                    + ".tsv",
+                    + ".bed",
                 )
                 missing_calls.write_csv(
                     output_path, separator="\t", include_header=True

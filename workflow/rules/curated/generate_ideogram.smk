@@ -82,7 +82,7 @@ rule plot_ideogram:
                 tool="nucflag",
                 version=f"v1.0.1",
             )[0],
-            "missed_calls.tsv",
+            "missed_calls.bed",
         ),
         inspector_calls=join(
             expand(
@@ -90,7 +90,7 @@ rule plot_ideogram:
                 tool="inspector",
                 version=f"v1.0.1",
             )[0],
-            "missed_calls.tsv",
+            "missed_calls.bed",
         ),
         flagger_calls=join(
             expand(
@@ -98,7 +98,7 @@ rule plot_ideogram:
                 tool="flagger",
                 version=f"v1.0.1",
             )[0],
-            "missed_calls.tsv",
+            "missed_calls.bed",
         ),
         fai=expand(rules.download_curated_asm.output.fai, version=f"v1.0.1")[0],
         segdups=rules.convert_to_bed.output.segdups,
@@ -139,7 +139,7 @@ rule plot_ideogram_chrom:
                 tool="nucflag",
                 version=f"v1.0.1",
             )[0],
-            "missed_calls.tsv",
+            "missed_calls.bed",
         ),
         inspector_calls=join(
             expand(
@@ -147,7 +147,7 @@ rule plot_ideogram_chrom:
                 tool="inspector",
                 version=f"v1.0.1",
             )[0],
-            "missed_calls.tsv",
+            "missed_calls.bed",
         ),
         flagger_calls=join(
             expand(
@@ -155,7 +155,7 @@ rule plot_ideogram_chrom:
                 tool="flagger",
                 version=f"v1.0.1",
             )[0],
-            "missed_calls.tsv",
+            "missed_calls.bed",
         ),
         segdups=rules.convert_to_bed.output.segdups,
         censat=rules.convert_to_bed.output.censat,
