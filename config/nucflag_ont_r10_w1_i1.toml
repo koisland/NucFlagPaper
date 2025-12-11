@@ -4,7 +4,6 @@ bp_merge = 1
 bp_wg_window = 5_000_000
 bp_min_aln_length = 1
 ignore_boundaries = true
-merge_identical = true
 
 [cov]
 n_zscores_high = 4.0

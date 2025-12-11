@@ -3,10 +3,12 @@ samples:
     threads: 40
     assembler: hifiasm
     mem: 250GB
+    added_args: "-l0"
     data:
       ont:
         path: /project/logsdon_shared/data/reference/CHM13/raw_data/ont/
-        include: ["*.fastq.gz"]
+        # Filter to 100 kbp >
+        include: ["*100kbp.fastq.gz"]
       hifi:
         path: /project/logsdon_shared/data/reference/CHM13/raw_data/hifi
         include: ["*.fastq.gz"]
@@ -17,7 +19,9 @@ samples:
     data:
       ont:
         path: /project/logsdon_shared/data/reference/CHM13/raw_data/ont/
-        include: ["*.fastq.gz"]
+        # Filter to 100 kbp >
+        include: ["*100kbp.fastq.gz"]
       hifi:
         path: /project/logsdon_shared/data/reference/CHM13/raw_data/hifi
-        include: ["*.fastq.gz"]
+        # Gunzip due to bug in verkko
+        include: ["*.fastq.gz.fastq"]

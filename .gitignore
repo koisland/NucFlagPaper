@@ -11,3 +11,5 @@ data/
 *.done
 inspector
 exp
+.parallel
+.keras

@@ -31,7 +31,7 @@ nf_config_base = {
     "output_pileup": False,
     "threads_aln": 24,
     "mem_aln": "50G",
-    "processes_nucflag": 24,
+    "processes_nucflag": 12,
     "threads_nucflag": 12,
     "mem_nucflag": "50G",
     # Filter unmapped, non-primary, and supplementary alignments.

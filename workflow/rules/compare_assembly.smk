@@ -12,8 +12,8 @@ module CompareAssembly:
         {
             "samples": assembly_config["samples"],
             "output_dir": join(config["output_dir"], "assembly"),
-            "logs_dir": join(config["logs_dir"], "assembly"),
-            "benchmarks_dir": join(config["benchmarks_dir"], "assembly"),
+            "log_dir": join(config["logs_dir"], "assembly"),
+            "benchmark_dir": join(config["benchmarks_dir"], "assembly"),
         }
 
 

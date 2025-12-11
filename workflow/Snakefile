@@ -33,7 +33,7 @@ if config.get("assembly_config"):
 
     include: "rules/compare_assembly.smk"
 
-    outputs.append(rules.cmp_asm_denovo_all.input)
+    outputs.append(rules.cmp_asm_all.input)
 
 
 rule all:

@@ -117,6 +117,8 @@ def main():
     missed_calls_kwargs = dict(
         comment_prefix="#",
         separator="\t",
+        has_header=False,
+        new_columns=["chrom", "st", "end", "type"],
     )
     dfs_calls = [
         pl.read_csv(

@@ -86,7 +86,7 @@ config = {
     "benchmarks_dir": BENCHMARK_DIR,
     "threads_aln": 24,
     "mem_aln": "50G",
-    "processes_nucflag": 24,
+    "processes_nucflag": 12,
     "threads_nucflag": 12,
     "mem_nucflag": "50G",
     # Filter unmapped, non-primary, and supplementary alignments.
@@ -139,6 +139,23 @@ inspector_config = {
 }
 
 
+deepvariant_config = {
+    "output_dir": join("results", "curated", "deepvariant"),
+    "benchmarks_dir": join("benchmarks", "curated", "deepvariant"),
+    "logs_dir": join("logs", "curated", "deepvariant"),
+    "samples": [
+        {
+            "name": f"HG002_{version}",
+            "asm_fa": expand(rules.download_curated_asm.output.fa, version=version)[0],
+            "bam": rules.versioned_aln_merge_read_asm_alignments.output.alignment.format(
+                sm=f"HG002_{version}",
+            ),
+        }
+        for version, data in ASSEMBLIES.items()
+    ],
+}
+
+
 module Inspector:
     snakefile:
         "../inspector.smk"
@@ -157,6 +174,16 @@ module Flagger:
 
 
 use rule * from Flagger as versioned_*
+
+
+module DeepVariant:
+    snakefile:
+        "../deepvariant.smk"
+    config:
+        deepvariant_config
+
+
+use rule * from DeepVariant as versioned_*
 
 
 def get_bed_files(wc):
@@ -203,6 +230,7 @@ rule all:
         rules.versioned_nucflag.input,
         rules.versioned_flagger.input,
         rules.versioned_inspector.input,
+        rules.versioned_deepvariant.input,
         expand(rules.convert_vcf_to_bed.output, version=ASSEMBLIES.keys()),
         expand(
             rules.calculate_precision_recall.output,
