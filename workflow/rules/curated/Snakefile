@@ -82,6 +82,8 @@ config = {
     "output_dir": OUTPUT_DIR,
     "output_plots": False,
     "output_pileup": False,
+    "output_ideogram": True,
+    "output_breakdown": True,
     "logs_dir": LOG_DIR,
     "benchmarks_dir": BENCHMARK_DIR,
     "threads_aln": 24,

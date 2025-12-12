@@ -5,6 +5,7 @@ from os.path import join
 OUTPUT_DIR = config["output_dir"]
 LOG_DIR = config["log_dir"]
 BENCHMARK_DIR = config["benchmark_dir"]
+NUCFLAG_CONFIG = config["nucflag_config"]
 
 
 module DenovoAssembly:
@@ -40,7 +41,7 @@ nf_config = {
                 )[0]
             ),
             "reads": get_reads_from_glob(config["samples"][sm]["data"][dtype]),
-            "preset": dtype if dtype != "ont" else "ont_r9",
+            "config": NUCFLAG_CONFIG[dtype],
         }
         for sm in config["samples"].keys()
         for dtype in ["hifi", "ont"]
@@ -49,7 +50,7 @@ nf_config = {
     "output_plots": False,
     "output_pileup": False,
     "output_ideogram": True,
-    "output_breakown": True,
+    "output_breakdown": True,
     "logs_dir": join(LOG_DIR, "nucflag"),
     "benchmarks_dir": join(BENCHMARK_DIR, "nucflag"),
     "threads_aln": 24,

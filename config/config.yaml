@@ -12,4 +12,7 @@ config:
 group_by:
   A_thaliana: "^(.*?)$"
   HG002: "^(.*?)_(.*?)$"
-assembly_config: "config/config_assembly.yaml"
+assembly_config:
+  manifest: "config/config_assembly.yaml"
+  nucflag_hifi: "config/nucflag_hifi_chm13.toml"
+  nucflag_ont: "config/nucflag_ont_chm13.toml"
