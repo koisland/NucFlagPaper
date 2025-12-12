@@ -196,6 +196,8 @@ def get_bed_files(wc):
         return expand(rules.versioned_run_flagger.output, sm=f"HG002_{wc.version}")
     elif wc.tool == "inspector":
         return expand(rules.versioned_merge_calls.output, sm=f"HG002_{wc.version}")
+    elif wc.tool == "deepvariant":
+        return expand(rules.versioned_filter_vcf_calls.output, sm=f"HG002_{wc.version}")
     else:
         raise ValueError(f"Invalid tool. {wc.tool}")
 
@@ -235,7 +237,7 @@ rule all:
         expand(
             rules.calculate_precision_recall.output,
             version=ASSEMBLIES.keys(),
-            tool=["flagger", "inspector", "nucflag"],
+            tool=["flagger", "inspector", "nucflag", "deepvariant"],
         ),
         rules.generate_ideogram.input,
     default_target: True

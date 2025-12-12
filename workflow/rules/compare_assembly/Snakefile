@@ -27,17 +27,22 @@ def get_reads_from_glob(data_src: dict) -> list[str]:
 nf_config = {
     "samples": [
         {
-            "name": sm,
+            # Must have no underscores.
+            # Format: SM_verkko or SM_hifiasm
+            "name": f"{sm}_{dtype}",
             "asm_fa": (
-                expand(rules.denovo_hifiasm_output.output, asm=asm, sm=sm)[0]
-                if asm == "verkko"
-                else expand(rules.denovo_hifiasm_output.output, asm=asm, sm=sm)[0]
+                expand(rules.denovo_verkko_output.output, asm=sm.split("_")[1], sm=sm)[
+                    0
+                ]
+                if sm.split("_")[1] == "verkko"
+                else expand(
+                    rules.denovo_hifiasm_output.output, asm=sm.split("_")[1], sm=sm
+                )[0]
             ),
             "reads": get_reads_from_glob(config["samples"][sm]["data"][dtype]),
-            "preset": dtype,
+            "preset": dtype if dtype != "ont" else "ont_r9",
         }
         for sm in config["samples"].keys()
-        for asm in ["verkko", "hifiasm"]
         for dtype in ["hifi", "ont"]
     ],
     "output_dir": join(OUTPUT_DIR, "nucflag"),

@@ -53,18 +53,30 @@ rule run_deepvariant:
         """
 
 
-rule convert_vcf_to_bed:
+"""
+Filter VCF calls to those that PASS
+Also consider GQ?
+* https://github.com/google/deepvariant/issues/503
+"""
+
+
+rule filter_vcf_calls:
     input:
-        rules.run_deepvariant.output.vcf,
+        vcf=rules.run_deepvariant.output.vcf,
     output:
         bed=join(OUTPUT_DIR, "{sm}.bed"),
     shell:
         """
-
+        zcat -f {input.vcf} | grep -v "#" | awk -v OFS="\\t" '{{
+            # TODO: Filter by GQ?
+            if ($7 != "PASS") {{ next }};
+            print $1, $2, $2 + length($4), $4"-"$5, 0, $3, $2, $2 + length($4), "0,0,0"
+        }}' > {output}
         """
 
 
 rule deepvariant:
     input:
         expand(rules.run_deepvariant.output, sm=SAMPLES.keys()),
+        expand(rules.filter_vcf_calls.output, sm=SAMPLES.keys()),
     default_target: True
