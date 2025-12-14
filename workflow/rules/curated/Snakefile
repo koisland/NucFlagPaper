@@ -26,6 +26,10 @@ ANNOTATIONS_V101 = [
     "https://s3-us-west-2.amazonaws.com/human-pangenomics/T2T/HG002/assemblies/annotation/centromere/hg002v1.0.1_v2.0/hg002v1.0.1.cenSatv2.0.noheader.bb",
     "https://42basepairs.com/download/s3/human-pangenomics/T2T/HG002/assemblies/annotation/cytoband/cytoBand.hg002v1.0.bb",
 ]
+ELEMENT = {
+    "R1": "s3://human-pangenomics/T2T/scratch/HG002/sequencing/element/trio/HG002/ins1000/ASHG-C063_R1.fastq.gz",
+    "R2": "s3://human-pangenomics/T2T/scratch/HG002/sequencing/element/trio/HG002/ins1000/ASHG-C063_R2.fastq.gz",
+}
 
 
 wildcard_constraints:
@@ -66,6 +70,22 @@ rule download_curated_asm:
         """
         wget {params.url_asm} -O {output.fa}
         wget {params.url_asm}.fai -O {output.fai}
+        """
+
+
+rule download_element:
+    output:
+        reads_1=join(OUTPUT_DIR, "data", "reads", "ASHG-C063_R1.fastq.gz"),
+        reads_2=join(OUTPUT_DIR, "data", "reads", "ASHG-C063_R2.fastq.gz"),
+    params:
+        uri_1=ELEMENT["R1"],
+        uri_2=ELEMENT["R2"],
+    conda:
+        "../../envs/curated.yaml"
+    shell:
+        """
+        aws s3 --no-sign-request cp {params.uri_1} {output.reads_1}
+        aws s3 --no-sign-request cp {params.uri_2} {output.reads_2}
         """
 
 
@@ -227,6 +247,7 @@ rule calculate_precision_recall:
 
 include: "generate_ideogram.smk"
 include: "validate_homopolymers.smk"
+include: "qv.smk"
 
 
 rule all:
@@ -242,4 +263,6 @@ rule all:
             tool=["flagger", "inspector", "nucflag", "deepvariant"],
         ),
         rules.generate_ideogram.input,
+        rules.validate_homopolymers_all.input,
+        rules.qv_all.input,
     default_target: True

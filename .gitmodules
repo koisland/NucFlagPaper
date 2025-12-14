@@ -19,3 +19,6 @@
 	path = workflow/rules/compare_assembly/Snakemake-Assembly
 	url = https://github.com/logsdon-lab/Snakemake-Assembly
 	ignore = "dirty"
+[submodule "workflow/rules/curated/Snakemake-merqury"]
+	path = workflow/rules/curated/Snakemake-merqury
+	url = https://github.com/logsdon-lab/Snakemake-merqury.git

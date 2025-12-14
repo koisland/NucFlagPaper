@@ -1,0 +1,9 @@
+
+rule download_aligned_bams:
+    input:
+        "",
+    output:
+        "",
+    shell:
+        """
+        """

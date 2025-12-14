@@ -1,0 +1,15 @@
+channels:
+  - conda-forge
+  - bioconda
+dependencies:
+  - awscli
+  - samtools
+  - bwa
+  - longdust
+  - merqury
+  - git-lfs
+  - python==3.12.0
+  - polars
+  - matplotlib
+  - seaborn
+  - numpy

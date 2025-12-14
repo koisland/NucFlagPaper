@@ -16,7 +16,3 @@ HG002	ont	s3://human-pangenomics/submissions/0CB931D5-AE0C-4187-8BD8-B3A9C9BFDAD
 HG002	ont	s3://human-pangenomics/submissions/0CB931D5-AE0C-4187-8BD8-B3A9C9BFDADE--UCSC_HG002_R1041_Duplex_Dorado/Dorado_v0.1.1/stereo_duplex/11_15_22_R1041_Duplex_HG002_9_Dorado_v0.1.1_400bps_sup_stereo_duplex_pass.fastq.gz
 HG002	ont	s3://human-pangenomics/submissions/0CB931D5-AE0C-4187-8BD8-B3A9C9BFDADE--UCSC_HG002_R1041_Duplex_Dorado/Dorado_v0.1.1/stereo_duplex/1_3_23_R1041_Duplex_HG002_2_Dorado_v0.1.1_400bps_sup_stereo_duplex_pass.fastq.gz
 HG002	ont	s3://human-pangenomics/submissions/0CB931D5-AE0C-4187-8BD8-B3A9C9BFDADE--UCSC_HG002_R1041_Duplex_Dorado/Dorado_v0.1.1/stereo_duplex/1_3_23_R1041_Duplex_HG002_3_Dorado_v0.1.1_400bps_sup_stereo_duplex_pass.fastq.gz
-HG002	rm	https://s3-us-west-2.amazonaws.com/human-pangenomics/T2T/HG002/assemblies/annotation/repeatmasker/hg002v1.1.paternal.bb
-HG002	rm	https://s3-us-west-2.amazonaws.com/human-pangenomics/T2T/HG002/assemblies/annotation/repeatmasker/hg002v1.1.maternal.bb
-A_thaliana	assembly	https://download.cncb.ac.cn/gwh/Plants/Arabidopsis_thaliana_AT_GWHBDNP00000000.1/GWHBDNP00000000.1.genome.fasta.gz
-A_thaliana	hifi	https://download.cncb.ac.cn/gsa/CRA004538/CRR302668/CRR302668.fastq.gz
