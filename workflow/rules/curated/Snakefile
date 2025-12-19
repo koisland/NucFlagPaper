@@ -8,6 +8,7 @@ BENCHMARK_DIR = config["benchmarks_dir"]
 LOG_DIR = config["logs_dir"]
 HIFI = config["hifi"]
 CONFIG = config["config"]
+CONFIG_ELEMENT = config["config_element"]
 FLAGGER_ALPHA = config["alpha"]
 
 
@@ -243,6 +244,11 @@ rule calculate_precision_recall:
         -b {input.truth_bed} \
         --output_dir_missed_calls {output.missed_calls_dir} > {output.summary}
         """
+
+
+# TODO: Create venn-diagram shared between callers
+
+# TODO: Consensus precision/recall as more callers added.
 
 
 include: "generate_ideogram.smk"

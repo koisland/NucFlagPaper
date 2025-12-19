@@ -6,10 +6,13 @@ dependencies:
   - samtools
   - bwa
   - longdust
-  - merqury
-  - git-lfs
   - python==3.12.0
   - polars
   - matplotlib
   - seaborn
   - numpy
+  - pyfaidx
+  - matplotlib-venn
+  - scipy
+  - biopython
+  - intervaltree

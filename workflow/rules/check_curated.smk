@@ -8,6 +8,7 @@ module HG002_curated:
             "benchmarks_dir": join(config["benchmarks_dir"], "curated"),
             "hifi": [v.path for v in DATA["HG002"].hifi.values()],
             "config": config["config"]["hifi_curated"],
+            "config_element": config["config"]["element_curated"],
             "alpha": config["config"]["flagger_hifi"],
         }
 

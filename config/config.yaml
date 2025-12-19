@@ -8,6 +8,7 @@ config:
   flagger_hifi: "workflow/scripts/flagger/misc/alpha_tsv/HiFi_DC_1.2/alpha_optimum_trunc_exp_gaussian_w_16000_n_50.HiFi_DC_1.2_DEC_2024.v1.1.0.tsv"
   ont_r10: "config/nucflag_ont.toml"
   flagger_ont_r10: "workflow/scripts/flagger/misc/alpha_tsv/ONT_R1041_Dorado/alpha_optimum_trunc_exp_gaussian_w_8000_n_50.ONT_R1041_Dorado_DEC_2024.v1.1.0.tsv"
+  element_curated: "config/nucflag_element_curated.toml"
   hifi_curated: "config/nucflag_hifi_curated.toml"
 group_by:
   A_thaliana: "^(.*?)$"

@@ -13,3 +13,8 @@ inspector
 exp
 .parallel
 .keras
+
+# Ignore at root for testing
+/*.bed
+/*.png
+/*.xml
