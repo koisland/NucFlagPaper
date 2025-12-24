@@ -2,7 +2,6 @@ channels:
   - conda-forge
   - bioconda
 dependencies:
-  - r-base
-  - r-pafr
-  - r-ggplot
-  - r-dplyr
+  - seqkit
+  - bedtools
+  - samtools

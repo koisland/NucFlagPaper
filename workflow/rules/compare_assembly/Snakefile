@@ -73,11 +73,11 @@ module NucFlagDenovoAsm:
 use rule * from NucFlagDenovoAsm as nf_denovo_*
 
 
-include: "align_asm.smk"
+include: "asm_variant_graph.smk"
 
 
 rule all:
     input:
         rules.denovo_all.input,
-        rules.align_asm_ref_all.input,
+        rules.vg_all.input,
         rules.nf_denovo_nucflag.input,

@@ -270,5 +270,5 @@ rule all:
         ),
         rules.generate_ideogram.input,
         rules.validate_homopolymers_all.input,
-        rules.qv_all.input,
+        rules.qv_run_all.input,
     default_target: True

@@ -1,6 +1,7 @@
 import re
+import os
 import hashlib
-from os.path import join, dirname, basename
+from os.path import join, dirname, basename, splitext
 from typing import NamedTuple, Any
 from collections import defaultdict
 from dataclasses import dataclass, field

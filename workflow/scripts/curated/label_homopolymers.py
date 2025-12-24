@@ -1,3 +1,4 @@
+import os
 import sys
 import pyfaidx
 import argparse
@@ -52,7 +53,10 @@ def minimalize_ax(
 
 
 def plot_homopolymers_stacked(
-    homopolymer_bins: defaultdict[str, Counter[int, int]], outfile: str
+    homopolymer_bins: defaultdict[str, Counter[int, int]],
+    outfile: str,
+    xlabel: str = "Homopolymer length (bp)",
+    ylabel: str = "Number of NucFlag homopolymer calls",
 ):
     fig, ax = plt.subplots(layout="constrained", figsize=(8, 8))
     max_homopolymer_length = max(max(lns.keys()) for _, lns in homopolymer_bins.items())
@@ -78,8 +82,8 @@ def plot_homopolymers_stacked(
         all_nt_homopolymer_cnts += nt_homopolymer_cnts
 
     minimalize_ax(ax, spines=("top", "right"))
-    ax.set_xlabel("Homopolymer length (bp)")
-    ax.set_ylabel("Number of NucFlag homopolymer calls")
+    ax.set_xlabel(xlabel)
+    ax.set_ylabel(ylabel)
     ax.legend(loc="upper right", **LEGEND_KWARGS)
     fig.savefig(outfile, bbox_inches="tight", dpi=300)
 
@@ -87,6 +91,8 @@ def plot_homopolymers_stacked(
 def plot_homopolymers_split(
     homopolymer_bins: defaultdict[str, Counter[int, int]],
     outfile: str,
+    xlabel: str = "Homopolymer length (bp)",
+    ylabel: str = "Number of NucFlag homopolymer calls",
     *,
     include_n: bool,
 ):
@@ -97,6 +103,7 @@ def plot_homopolymers_split(
         ncols=len(NT_COLORS.keys()) - int(not include_n),
         sharey=True,
     )
+    # Draw all homopolymers as hatched bar
     max_homopolymer_length = max(max(lns.keys()) for _, lns in homopolymer_bins.items())
 
     for i, (nt, cnt) in enumerate(homopolymer_bins.items()):
@@ -121,8 +128,8 @@ def plot_homopolymers_split(
         nt if nt != "N" else "Undefined": Patch(color=NT_COLORS[nt], alpha=0.5)
         for nt in ["N", *homopolymer_bins.keys()]
     }
-    fig.supxlabel("Homopolymer length (bp)")
-    fig.supylabel("Number of NucFlag homopolymer calls")
+    fig.supxlabel(xlabel)
+    fig.supylabel(ylabel)
     # https://stackoverflow.com/questions/4700614/how-to-put-the-legend-outside-the-plot
     fig.legend(
         labels=labels_handles.keys(),
@@ -191,16 +198,10 @@ def main():  #
         help="All homopolymers from NucFlag that have no overlap with longdust homopolymers.",
     )
     ap.add_argument(
-        "-s",
-        "--plot_stacked",
-        default="homopolymers_dist_stacked.png",
-        help="Plot for nucflag homopolymer distribution stacked.",
-    )
-    ap.add_argument(
         "-p",
-        "--plot_split",
-        default="homopolymers_dist_split.png",
-        help="Plot for nucflag homopolymer distribution split by nucleotide.",
+        "--plot_prefix",
+        default="homopolymers",
+        help="Plot prefix for plots.",
     )
 
     args = ap.parse_args()
@@ -208,6 +209,7 @@ def main():  #
     df_nucflag_homopolymer_calls = pl.read_csv(
         args.calls, separator="\t", has_header=True
     ).filter(pl.col("name") == "homopolymer")
+    all_homopolymer_bins = defaultdict(Counter)
 
     if not args.homopolymers:
         reference: str | None = args.reference
@@ -240,6 +242,7 @@ def main():  #
         itv: it.Interval
         for chrom, itree in homopolymers.items():
             for itv in itree.iter():
+                all_homopolymer_bins[itv.data][itv.length()] += 1
                 print(chrom, itv.begin, itv.end, itv.data, file=args.outfile, sep="\t")
     else:
         df_homopolymers = pl.read_csv(
@@ -250,6 +253,7 @@ def main():  #
         )
         homopolymers = defaultdict(it.IntervalTree)
         for chrom, st, end, nt in df_homopolymers.iter_rows():
+            all_homopolymer_bins[nt][end - st] += 1
             homopolymers[chrom].add(it.Interval(st, end, nt))
 
         print("Homopolymers loaded from homopolymers bed.", file=sys.stderr)
@@ -266,7 +270,7 @@ def main():  #
         assert len(ovl) <= 1, (
             f"Should not have more than one overlap for {chrom}:{st}-{end}."
         )
-        # False positive from nucflag
+        # False positive from nucflag (ex. AAAATAAAATAAAAT) or false negative from longdust
         if not ovl:
             len_homopolymer = 0
             if fh_fai:
@@ -284,15 +288,29 @@ def main():  #
         homopolymer_bins[nt_homopolymer][len_homopolymer] += 1
 
     print("Homopolymers binned.", file=sys.stderr)
-
-    plot_homopolymers_stacked(homopolymer_bins, args.plot_stacked)
+    # NucFlag overlap
+    plot_homopolymers_stacked(
+        homopolymer_bins, os.path.join(f"{args.plot_prefix}_ovl_stacked.png")
+    )
     plot_homopolymers_split(
-        homopolymer_bins, args.plot_split, include_n=args.reference is None
+        homopolymer_bins,
+        os.path.join(f"{args.plot_prefix}_ovl_split.png"),
+        include_n=args.reference is None,
+    )
+    # All
+    plot_homopolymers_stacked(
+        all_homopolymer_bins,
+        os.path.join(f"{args.plot_prefix}_all_stacked.png"),
+        ylabel="Number of longdust homopolymer calls",
+    )
+    plot_homopolymers_split(
+        all_homopolymer_bins,
+        os.path.join(f"{args.plot_prefix}_all_split.png"),
+        ylabel="Number of longdust homopolymer calls",
+        include_n=args.reference is None,
     )
 
-    print(
-        f"Figures saved to {args.plot_stacked} and {args.plot_split}.", file=sys.stderr
-    )
+    print(f"Figures saved to {args.plot_prefix}.", file=sys.stderr)
 
 
 if __name__ == "__main__":

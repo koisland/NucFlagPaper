@@ -15,4 +15,6 @@ printshellcmds: True
 rerun-incomplete: True
 show-failed-logs: True
 rerun-triggers: mtime
+scheduler: greedy
+scheduler-subsample: 200
 singularity-args: "-B /scratch,/usr/lib/locale/:/usr/lib/locale/"
