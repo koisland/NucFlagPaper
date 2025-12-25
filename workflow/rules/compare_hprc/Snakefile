@@ -1,9 +1,188 @@
+from os.path import join
+from collections import defaultdict
 
-rule download_aligned_bams:
-    input:
-        "",
+
+OUTPUT_DIR = config["output_dir"]
+LOG_DIR = config["logs_dir"]
+BENCHMARK_DIR = config["benchmarks_dir"]
+# {sample: {dtype: { R1: [], R2: []}}}
+DATA = defaultdict(lambda: defaultdict(dict))
+RELEASES = ["R1", "R2"]
+
+with open(config["manifest"]) as fh:
+    next(fh)
+    for line in fh:
+        sample, asm_h1, asm_h2, bam, release = line.strip().split(",")
+        DATA[sample]["asm"][release] = [asm_h1, asm_h2]
+        DATA[sample]["bam"][release] = [bam]
+
+
+wildcard_constraints:
+    sm="|".join(DATA.keys()),
+    release="|".join(RELEASES),
+
+
+rule download_assemblies:
     output:
-        "",
+        asm=join(OUTPUT_DIR, "data", "{sm}_{release}.fa.gz"),
+        asm_fai=join(OUTPUT_DIR, "data", "{sm}_{release}.fa.gz.fai"),
+    params:
+        uris=lambda wc: DATA[wc.sm]["asm"][wc.release],
+    conda:
+        "../../envs/curated.yaml"
     shell:
         """
+        for uri in {params.uris}; do
+            aws s3 --no-sign-request cp "${{uri}}" - | zcat | bgzip >> {output.asm}
+        done
+        samtools faidx {output.asm}
         """
+
+
+rule download_aligned_bams:
+    output:
+        bam=join(OUTPUT_DIR, "data", "{sm}_{release}.bam"),
+        bai=join(OUTPUT_DIR, "data", "{sm}_{release}.bam.bai"),
+    params:
+        uri=lambda wc: DATA[wc.sm]["bam"][wc.release],
+    conda:
+        "../../envs/curated.yaml"
+    shell:
+        """
+        aws s3 --no-sign-request cp {params.uri} {output.bam}
+        aws s3 --no-sign-request cp {params.uri}.bai {output.bai}
+        """
+
+
+rule run_nucflag:
+    input:
+        bam=rules.download_aligned_bams.output.bam,
+        asm=rules.download_assemblies.output.asm,
+    output:
+        calls=join(
+            OUTPUT_DIR,
+            "{sm}_{release}.bed",
+        ),
+    params:
+        preset="hifi",
+    conda:
+        "../Snakemake-NucFlag/workflow/env/nucflag.yaml"
+    threads: 12
+    resources:
+        threads=12,
+        mem="50GB",
+    log:
+        join(LOG_DIR, "run_nucflag_{sm}_{release}.log"),
+    benchmark:
+        join(BENCHMARK_DIR, "run_nucflag_{sm}_{release}.tsv")
+    shell:
+        """
+        nucflag call \
+        -i {input.bam} \
+        -f {input.asm} \
+        -x {params.preset} \
+        -o {output.calls} \
+        -t {resources.threads} \
+        -p {threads} 2> {log}
+        """
+
+
+rule calculate_qv:
+    input:
+        calls=rules.run_nucflag.output.calls,
+    output:
+        qv=join(
+            OUTPUT_DIR,
+            "{sm}_{release}.qv.bed",
+        ),
+    conda:
+        "../Snakemake-NucFlag/workflow/env/nucflag.yaml"
+    shell:
+        """
+        nucflag qv -i {input.calls} > {output.qv}
+        """
+
+
+# We use R2 as reference as we ONT data inclusion makes assemblies much more contiguous. Better mapping to R1.
+# Put all possible pairs into asm-to-ref mapping and only run those that we want.
+ALN_CFG = {
+    "sm": {
+        f"{sm}_R1": expand(rules.download_assemblies.output, sm=sm, release="R1")[0]
+        for sm in DATA.keys()
+    },
+    "ref": {
+        f"{sm}_R2": expand(rules.download_assemblies.output, sm=sm, release="R2")[0]
+        for sm in DATA.keys()
+    },
+    "temp_dir": join(OUTPUT_DIR, "temp"),
+    "output_dir": join(OUTPUT_DIR, "asm_ref"),
+    "logs_dir": join(LOG_DIR, "asm_ref"),
+    "benchmarks_dir": join(BENCHMARK_DIR, "asm_ref"),
+    "aln_threads": 8,
+    "aln_mem": "60GB",
+    "mm2_opts": "-x asm5 --secondary=no -K 8G",
+}
+
+
+module AsmToRef:
+    snakefile:
+        "asm-to-reference-alignment/workflow/Snakefile"
+    config:
+        ALN_CFG
+
+
+use rule * from AsmToRef as asm_ref_*
+
+
+use rule asm_ref_alignment from AsmToRef as asm_ref_alignment with:
+    input:
+        ref=join(OUTPUT_DIR, "data", "{ref}.fa.gz"),
+        query=join(OUTPUT_DIR, "data", "{sm}.fa.gz"),
+    output:
+        aln=os.path.join(OUTPUT_DIR, "asm_ref", "temp", "{ref}", "{sm}.bam"),
+    log:
+        os.path.join(LOG_DIR, "asm_ref", "alignment_{ref}_{sm}.log"),
+    benchmark:
+        os.path.join(BENCHMARK_DIR, "asm_ref", "alignment_{ref}_{sm}.tsv")
+
+
+# TODO: Use rustybam stats to determine best contig mapping
+rule generate_asm_mapping:
+    input:
+        bed=expand(rules.asm_ref_aln_to_bed.output, ref="{sm}_R2", sm="{sm}_R1"),
+    output:
+        join(OUTPUT_DIR, "{sm}_mapping.tsv"),
+    params:
+        script="workflow/scripts/compare_hprc/generate_asm_mapping.py",
+    shell:
+        """
+        python {input.script} -i {input.bed} > {output}
+        """
+
+
+# TODO: QV scatter plot
+rule plot_qv_comparison:
+    input:
+        qv_r1=expand(rules.calculate_qv.output, sm=DATA.keys(), release="R1"),
+        qv_r2=expand(rules.calculate_qv.output, sm=DATA.keys(), release="R2"),
+        mapping=expand(rules.generate_asm_mapping.output, sm=DATA.keys()),
+    output:
+        join(OUTPUT_DIR, "plots", "hprc_qv_comparison.png"),
+    params:
+        script="workflow/scripts/compare_hprc/plot_qv_compare.py",
+    shell:
+        """
+        python {input.script} -x {input.qv_r1} -y {input.qv_r2} -m {input.mapping} -o {output}
+        """
+
+
+rule all:
+    input:
+        expand(rules.download_assemblies.output, sm=DATA.keys(), release=RELEASES),
+        expand(rules.download_aligned_bams.output, sm=DATA.keys(), release=RELEASES),
+        expand(rules.calculate_qv.output, sm=DATA.keys(), release=RELEASES),
+        expand(
+            expand(rules.asm_ref_aln_to_bed.output, ref="{sm}_R2", sm="{sm}_R1"),
+            sm=DATA.keys(),
+        ),
+    default_target: True

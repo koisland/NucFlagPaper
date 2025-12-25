@@ -17,3 +17,5 @@ assembly_config:
   manifest: "config/config_assembly.yaml"
   nucflag_hifi: "config/nucflag_hifi_chm13.toml"
   nucflag_ont: "config/nucflag_ont_chm13.toml"
+hprc:
+  manifest: "config/hprc_all_manifest.csv"

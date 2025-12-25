@@ -127,6 +127,7 @@ rule versioned_element_check_asm_nucflag:
             OUTPUT_DIR,
             "HG002_{version}_element_calls.bed",
         ),
+        pileup_dir=directory(join(OUTPUT_DIR, "HG002_{version}_element_pileup")),
     params:
         config=CONFIG_ELEMENT,
     conda:
@@ -147,6 +148,8 @@ rule versioned_element_check_asm_nucflag:
         -c {input.config} \
         -o {output.misassemblies} \
         -t {resources.threads} \
+        --output_pileup_dir {output.pileup_dir} \
+        --add_pileup_data mapq \
         -p {threads} 2> {log}
         """
 
@@ -181,6 +184,10 @@ rule get_consensus_nucflag:
         -i <(grep -P "{params.filter_call_pattern}" {input.calls_hifi}) \
         <(grep -P "{params.filter_call_pattern}" {input.calls_element}) > {output} 2> {log}
         """
+
+
+# TODO: Merge MAPQ bigWigs and convert to bedGraph?
+# TODO: Summarize/plot checking against low MAPQ regions.
 
 
 rule validate_homopolymers_all:

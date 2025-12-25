@@ -19,6 +19,7 @@ include: "rules/download_data.smk"
 include: "rules/simulate_misassemblies.smk"
 include: "rules/compare_aligners.smk"
 include: "rules/check_curated.smk"
+include: "rules/compare_hprc.smk"
 
 
 outputs = [
@@ -26,7 +27,9 @@ outputs = [
     rules.sim_all.input,
     rules.aln_cmp_all.input,
     rules.hg002_curated_all.input,
+    rules.hprc_all.input,
 ]
+
 
 # Data is not downloaded so must manually trigger.
 if config.get("assembly_config"):
