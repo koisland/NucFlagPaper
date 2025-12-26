@@ -186,8 +186,31 @@ rule get_consensus_nucflag:
         """
 
 
-# TODO: Merge MAPQ bigWigs and convert to bedGraph?
-# TODO: Summarize/plot checking against low MAPQ regions.
+# Merge MAPQ bigWigs and convert to bedGraph.
+rule merge_element_mapq_bigwigs:
+    input:
+        bw_dir_element=rules.versioned_element_check_asm_nucflag.output.pileup_dir,
+    output:
+        bw=os.path.join(
+            OUTPUT_DIR,
+            "HG002_{version}_element_mapq.bw",
+        ),
+        bg=os.path.join(
+            OUTPUT_DIR,
+            "HG002_{version}_element_mapq.bg.gz",
+        ),
+    params:
+        bg_interm=lambda wc, output: output.bg.replace(".gz", ""),
+    conda:
+        "../../envs/curated.yaml"
+    shell:
+        """
+        bigwigmerge -l <(find {input.bw_dir_element}/*.bw) {output.bw}
+        bigwigtobedgraph {output.bw} {params.bg_interm} && bgzip {params.bg_interm}
+        """
+
+
+# TODO: Summarize/plot checking against low MAPQ regions. Histogram of valid hits
 
 
 rule validate_homopolymers_all:
@@ -198,4 +221,5 @@ rule validate_homopolymers_all:
         ),
         expand(rules.find_all_lcr_regions.output, version=ASSEMBLIES.keys()),
         expand(rules.get_consensus_nucflag.output, version=ASSEMBLIES.keys()),
+        expand(rules.merge_element_mapq_bigwigs.output, version=ASSEMBLIES.keys()),
     default_target: True
