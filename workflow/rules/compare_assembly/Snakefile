@@ -24,6 +24,10 @@ def get_reads_from_glob(data_src: dict) -> list[str]:
     return glob.glob(join(data_dir, glob_include))
 
 
+# TODO: Liftover cytobands (https://s3-us-west-2.amazonaws.com/human-pangenomics/T2T/CHM13/assemblies/annotation/chm13v2.0_cytobands_allchrs.bed)
+# TODO: Liftover censat (https://s3-us-west-2.amazonaws.com/human-pangenomics/T2T/CHM13/assemblies/annotation/chm13v2.0_censat_v2.1.bed)
+
+
 # Then run NucFlag on each assembly
 nf_config = {
     "samples": [

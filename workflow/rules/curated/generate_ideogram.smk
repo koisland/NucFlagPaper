@@ -80,7 +80,7 @@ rule plot_ideogram:
             expand(
                 rules.calculate_precision_recall.output.missed_calls_dir,
                 tool="nucflag",
-                version=f"v1.0.1",
+                version="v1.0.1",
             )[0],
             "missed_calls.bed",
         ),
@@ -88,7 +88,7 @@ rule plot_ideogram:
             expand(
                 rules.calculate_precision_recall.output.missed_calls_dir,
                 tool="inspector",
-                version=f"v1.0.1",
+                version="v1.0.1",
             )[0],
             "missed_calls.bed",
         ),
@@ -96,7 +96,15 @@ rule plot_ideogram:
             expand(
                 rules.calculate_precision_recall.output.missed_calls_dir,
                 tool="flagger",
-                version=f"v1.0.1",
+                version="v1.0.1",
+            )[0],
+            "missed_calls.bed",
+        ),
+        deepvariant_calls=join(
+            expand(
+                rules.calculate_precision_recall.output.missed_calls_dir,
+                tool="deepvariant",
+                version="v1.0.1",
             )[0],
             "missed_calls.bed",
         ),
@@ -121,6 +129,7 @@ rule plot_ideogram:
         --truth {input.truth} \
         --nucflag {input.nucflag_calls} \
         --inspector {input.inspector_calls} \
+        --deepvariant {input.deepvariant_calls} \
         --flagger {input.flagger_calls} \
         --segdups {input.segdups} \
         --censat {input.censat} \
@@ -137,7 +146,7 @@ rule plot_ideogram_chrom:
             expand(
                 rules.calculate_precision_recall.output.missed_calls_dir,
                 tool="nucflag",
-                version=f"v1.0.1",
+                version="v1.0.1",
             )[0],
             "missed_calls.bed",
         ),
@@ -145,7 +154,7 @@ rule plot_ideogram_chrom:
             expand(
                 rules.calculate_precision_recall.output.missed_calls_dir,
                 tool="inspector",
-                version=f"v1.0.1",
+                version="v1.0.1",
             )[0],
             "missed_calls.bed",
         ),
@@ -153,7 +162,15 @@ rule plot_ideogram_chrom:
             expand(
                 rules.calculate_precision_recall.output.missed_calls_dir,
                 tool="flagger",
-                version=f"v1.0.1",
+                version="v1.0.1",
+            )[0],
+            "missed_calls.bed",
+        ),
+        deepvariant_calls=join(
+            expand(
+                rules.calculate_precision_recall.output.missed_calls_dir,
+                tool="deepvariant",
+                version="v1.0.1",
             )[0],
             "missed_calls.bed",
         ),
@@ -171,6 +188,7 @@ rule plot_ideogram_chrom:
         --nucflag {input.nucflag_calls} \
         --inspector {input.inspector_calls} \
         --flagger {input.flagger_calls} \
+        --deepvariant {input.deepvariant_calls} \
         --segdups {input.segdups} \
         --censat {input.censat} \
         -o {output.plot} \

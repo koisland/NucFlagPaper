@@ -12,8 +12,11 @@ dependencies:
   - seaborn
   - numpy
   - pyfaidx
-  - matplotlib-venn
+  - pandas
   - scipy
   - biopython
   - intervaltree
   - bigtools
+  - pip
+  - pip:
+    - supervenn

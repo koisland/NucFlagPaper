@@ -56,6 +56,9 @@ def cmd_contig_qv(wc, input):
     return " ".join(cmds)
 
 
+# TODO: Plot QV function with bp_err.
+
+
 # QV correlation with NucFlag QV.
 # * Should also show individual examples where QV underestimates (Show example in HSAT-1A in chr4_MATERNAL)
 rule plot_nucflag_merqury_qv_plot:

@@ -8,9 +8,9 @@ from matplotlib.axes import Axes
 
 DF_READ_DEPTH = pl.DataFrame(
     {
-        "sample": ["HG002", "HG002", "A_thaliana"],
-        "coverage": [49.9671, 21.1335, 148.523],
-        "dtype": ["hifi", "ont_r10", "hifi"],
+        "sample": ["HG002", "HG002"],
+        "coverage": [49.9671, 21.1335],
+        "dtype": ["hifi", "ont_r10"],
     }
 )
 TOOL_VERSIONS = {

@@ -21,8 +21,14 @@ CALL_NAMES = {
 }
 BAND_COLORS = pyid.BANDCOL | {"none": (1.0, 1.0, 1.0)}
 LBL_KWARGS = dict(rotation=0, ha="right", va="center")
-TOOL_NAMES = ["Truth", "NucFlag v1.0", "Inspector v1.3", "HMM-Flagger v1.1.0"]
-TOOL_COLORS = ["black", "purple", "teal", "magenta"]
+TOOL_NAMES = [
+    "Truth",
+    "NucFlag v1.0",
+    "Inspector v1.3",
+    "HMM-Flagger v1.1.0",
+    "DeepVariant v1.9.0",
+]
+TOOL_COLORS = ["black", "purple", "teal", "magenta", "maroon"]
 
 
 def minimize_ax(ax: Axes, *, remove_ticks: bool = False):
@@ -40,6 +46,7 @@ def main():
     ap.add_argument("--truth")
     ap.add_argument("--nucflag")
     ap.add_argument("--flagger")
+    ap.add_argument("--deepvariant")
     ap.add_argument("--inspector")
     ap.add_argument("--segdups")
     ap.add_argument("--censat")
@@ -66,6 +73,7 @@ def main():
         pl.read_csv(args.nucflag, **missed_calls_kwargs),
         pl.read_csv(args.inspector, **missed_calls_kwargs),
         pl.read_csv(args.flagger, **missed_calls_kwargs),
+        pl.read_csv(args.deepvariant, **missed_calls_kwargs),
     ]
 
     if not args.fp:
@@ -151,7 +159,7 @@ def main():
     fig_overview.savefig(outfile_overview, bbox_inches="tight", dpi=600)
 
     chrom_names = df_fai["chrom_name"].unique(maintain_order=True)
-    base_height_ratios = [0.5, 0.25, 0.25, 0.25, 0.25, 0.25]
+    base_height_ratios = [0.5, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25]
     width_ratios = [0.0025, 0.5, 0.075, 0.0025, 0.5]
     num_tracks = len(base_height_ratios)
     height_ratios = base_height_ratios * len(chrom_names)

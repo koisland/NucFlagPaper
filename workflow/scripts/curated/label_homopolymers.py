@@ -52,18 +52,21 @@ def minimalize_ax(
         )
 
 
-def plot_homopolymers_stacked(
-    homopolymer_bins: defaultdict[str, Counter[int, int]],
-    outfile: str,
-    xlabel: str = "Homopolymer length (bp)",
-    ylabel: str = "Number of NucFlag homopolymer calls",
+def draw_stacked_bars(
+    ax: Axes,
+    hp_bins: defaultdict[str, Counter[int, int]],
+    override_color: str | None = None,
+    override_legend_label: str | None = None,
 ):
-    fig, ax = plt.subplots(layout="constrained", figsize=(8, 8))
-    max_homopolymer_length = max(max(lns.keys()) for _, lns in homopolymer_bins.items())
+    max_homopolymer_length = max(max(lns.keys()) for _, lns in hp_bins.items())
     all_nt_homopolymer_cnts = np.zeros(max_homopolymer_length + 1)
     # https://matplotlib.org/stable/gallery/lines_bars_and_markers/bar_stacked.html
-    for nt, cnt in homopolymer_bins.items():
-        color = NT_COLORS[nt]
+    for nt, cnt in hp_bins.items():
+        if override_color:
+            color = override_color
+        else:
+            color = NT_COLORS[nt]
+
         nt_homopolymer_ln = np.arange(max_homopolymer_length + 1)
         nt_homopolymer_cnts = np.zeros(max_homopolymer_length + 1)
         for h_ln, h_cnt in cnt.items():
@@ -71,20 +74,58 @@ def plot_homopolymers_stacked(
             h_ln = max(h_ln - 1, 0)
             nt_homopolymer_cnts[h_ln] = h_cnt
 
+        if override_legend_label:
+            label = override_legend_label
+        else:
+            label = nt
+
         ax.bar(
             x=nt_homopolymer_ln,
             height=nt_homopolymer_cnts,
             color=color,
             alpha=0.5,
-            label=nt,
+            label=label,
             bottom=all_nt_homopolymer_cnts,
         )
         all_nt_homopolymer_cnts += nt_homopolymer_cnts
 
+
+def plot_homopolymers_stacked(
+    homopolymer_bins: defaultdict[str, Counter[int, int]],
+    outfile: str,
+    xlabel: str = "Homopolymer length (bp)",
+    ylabel: str = "Number of NucFlag homopolymer calls",
+    other_homopolymer_bins: defaultdict[str, Counter[int, int]] | None = None,
+    other_homopolymer_bin_color: str | None = None,
+    other_homopolymer_bin_label: str | None = None,
+):
+    fig, ax = plt.subplots(layout="constrained", figsize=(8, 8))
+    ax: Axes
+    draw_stacked_bars(ax, homopolymer_bins)
+
+    if other_homopolymer_bins:
+        draw_stacked_bars(
+            ax,
+            other_homopolymer_bins,
+            override_color=other_homopolymer_bin_color,
+            override_legend_label=other_homopolymer_bin_label,
+        )
+
     minimalize_ax(ax, spines=("top", "right"))
     ax.set_xlabel(xlabel)
     ax.set_ylabel(ylabel)
-    ax.legend(loc="upper right", **LEGEND_KWARGS)
+
+    handles, labels = ax.get_legend_handles_labels()
+    labels_handles = {}
+    for label, handle in zip(labels, handles):
+        labels_handles[label] = handle
+
+    ax.legend(
+        labels=labels_handles.keys(),
+        handles=labels_handles.values(),
+        loc="upper right",
+        **LEGEND_KWARGS,
+    )
     fig.savefig(outfile, bbox_inches="tight", dpi=300)
 
 
@@ -265,7 +306,11 @@ def main():  #
 
     for line in df_nucflag_homopolymer_calls.iter_rows(named=True):
         chrom, st, end = line["#chrom"], line["chromStart"], line["chromEnd"]
-        ovl = homopolymers[chrom].overlap(st, end)
+        homopolymers_chrom = homopolymers.get(chrom)
+        if not homopolymers_chrom:
+            continue
+
+        ovl = homopolymers_chrom.overlap(st, end)
 
         assert len(ovl) <= 1, (
             f"Should not have more than one overlap for {chrom}:{st}-{end}."
@@ -302,6 +347,10 @@ def main():  #
         all_homopolymer_bins,
         os.path.join(f"{args.plot_prefix}_all_stacked.png"),
         ylabel="Number of longdust homopolymer calls",
+        # Draw other nucflag overlap as black
+        other_homopolymer_bins=homopolymer_bins,
+        other_homopolymer_bin_color="black",
+        other_homopolymer_bin_label="NucFlag",
     )
     plot_homopolymers_split(
         all_homopolymer_bins,
@@ -310,7 +359,7 @@ def main():  #
         include_n=args.reference is None,
     )
 
-    print(f"Figures saved to {args.plot_prefix}.", file=sys.stderr)
+    print(f"Figures saved to {args.plot_prefix}_*.png.", file=sys.stderr)
 
 
 if __name__ == "__main__":

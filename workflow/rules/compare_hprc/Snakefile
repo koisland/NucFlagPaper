@@ -118,7 +118,7 @@ rule plot_qv_comparison:
         "../../envs/tools.yaml"
     shell:
         """
-        python {input.script} \
+        python {params.script} \
         -a <(cat {input.qv_r1}) \
         -b <(cat {input.qv_r2}) \
         -o {output.png}

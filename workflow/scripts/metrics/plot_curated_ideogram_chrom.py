@@ -20,8 +20,14 @@ CALL_NAMES = {
     "false_negative": "False Negative",
 }
 LBL_KWARGS = dict(rotation=0, ha="right", va="center", fontsize="medium")
-TOOL_NAMES = ["Truth", "NucFlag v1.0", "Inspector v1.3", "HMM-Flagger v1.1.0"]
-TOOL_COLORS = ["black", "purple", "teal", "magenta"]
+TOOL_NAMES = [
+    "Truth",
+    "NucFlag v1.0",
+    "Inspector v1.3",
+    "HMM-Flagger v1.1.0",
+    "DeepVariant v1.9.0",
+]
+TOOL_COLORS = ["black", "purple", "teal", "magenta", "maroon"]
 SEGDUP_ORDERING = (
     r"Less than 90% similarity",
     r"90 - 98% similarity",
@@ -104,6 +110,7 @@ def main():
     ap.add_argument("--nucflag")
     ap.add_argument("--flagger")
     ap.add_argument("--inspector")
+    ap.add_argument("--deepvariant")
     ap.add_argument("--segdups")
     ap.add_argument("--censat")
     ap.add_argument("-o", "--outfile", default="out.png", help="Output file.")
@@ -136,6 +143,9 @@ def main():
             pl.col("chrom") == args.chrom
         ),
         pl.read_csv(args.flagger, **missed_calls_kwargs).filter(
+            pl.col("chrom") == args.chrom
+        ),
+        pl.read_csv(args.deepvariant, **missed_calls_kwargs).filter(
             pl.col("chrom") == args.chrom
         ),
     ]
@@ -217,7 +227,7 @@ def main():
     )
 
     color_key = CALL_COLOR_KEY
-    height_ratios = [0.5, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.5, 0.5, 0.5]
+    height_ratios = [0.5, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.5, 0.5, 0.5]  #
     fig, axes = plt.subplots(
         ncols=1,
         nrows=len(height_ratios),
@@ -226,13 +236,13 @@ def main():
         sharex=True,
     )
 
-    indices_calls = range(3, 7)
+    indices_calls = range(3, 8)  #
     idx_chrom = 0
     idx_censat = 1
     idx_segdup = 2
-    idx_censat_legend = 7
-    idx_segdup_legend = 8
-    idx_legend = 9
+    idx_censat_legend = 8  #
+    idx_segdup_legend = 9  #
+    idx_legend = 10  #
     ax: Axes = axes[idx_chrom]
 
     ax.xaxis.set_tick_params(which="both", length=0, labelleft=False)

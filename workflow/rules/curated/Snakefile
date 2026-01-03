@@ -245,7 +245,29 @@ rule calculate_precision_recall:
         """
 
 
-# TODO: Create venn-diagram shared between callers
+# Create venn-diagram shared between callers
+# Shows that NucFlag picks up a lot more than other callers.
+rule plot_call_venn:
+    input:
+        nucflag=expand(
+            rules.versioned_check_asm_nucflag.output.misassemblies,
+            sm="HG002_{version}",
+        )[0],
+        flagger=expand(rules.versioned_run_flagger.output, sm="HG002_{version}")[0],
+        inspector=expand(rules.versioned_merge_calls.output, sm="HG002_{version}")[0],
+        deepvariant=expand(
+            rules.versioned_filter_vcf_calls.output, sm="HG002_{version}"
+        )[0],
+    output:
+        plot=join(OUTPUT_DIR, "call_ovl", "overlap_{version}.png"),
+    params:
+        script="workflow/scripts/curated/call_venn_diagram.py",
+        json_inputs=lambda wc, input: json.dumps(dict(input)),
+    shell:
+        """
+        python {params.script} -i '{params.json_inputs}' -o {output.plot}
+        """
+
 
 # TODO: Consensus precision/recall as more callers added.
 
@@ -262,6 +284,7 @@ rule all:
         rules.versioned_inspector.input,
         rules.versioned_deepvariant.input,
         expand(rules.convert_vcf_to_bed.output, version=ASSEMBLIES.keys()),
+        expand(rules.plot_call_venn.output, version=ASSEMBLIES.keys()),
         expand(
             rules.calculate_precision_recall.output,
             version=ASSEMBLIES.keys(),
