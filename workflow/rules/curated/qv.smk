@@ -56,7 +56,19 @@ def cmd_contig_qv(wc, input):
     return " ".join(cmds)
 
 
-# TODO: Plot QV function with bp_err.
+# Plot QV function with bp_err.
+# Show concordance with Merqury and how both change as errors increase.
+rule plot_qv_functions:
+    output:
+        plot=join(OUTPUT_DIR, "qv", "functions.png"),
+    params:
+        script="workflow/scripts/curated/qv_functions.py",
+    conda:
+        "../../envs/curated.yaml"
+    shell:
+        """
+        python {params.script} {output}
+        """
 
 
 # QV correlation with NucFlag QV.
@@ -102,5 +114,6 @@ rule plot_nucflag_merqury_qv_plot:
 rule qv_run_all:
     input:
         rules.qv_all.input,
+        rules.plot_qv_functions.output,
         expand(rules.plot_nucflag_merqury_qv_plot.output, cond=["omit_acro", "default"]),
     default_target: True

@@ -95,23 +95,30 @@ rule calculate_qv:
     output:
         qv=join(
             OUTPUT_DIR,
-            "{sm}_{release}.qv.bed",
+            "{sm}_{release}_{ignore}.qv.bed",
         ),
+    params:
+        ignore=lambda wc: f"-c {wc.ignore}" if wc.ignore != "none" else "",
     conda:
         "../Snakemake-NucFlag/workflow/env/nucflag.yaml"
     shell:
         """
-        nucflag qv -i {input.calls} > {output.qv}
+        nucflag qv -i {input.calls} {params.ignore} > {output.qv}
         """
 
 
 # QV scatter plot
 rule plot_qv_comparison:
     input:
-        qv_r1=expand(rules.calculate_qv.output, sm=DATA.keys(), release="R1"),
-        qv_r2=expand(rules.calculate_qv.output, sm=DATA.keys(), release="R2"),
+        qv_r1=expand(
+            rules.calculate_qv.output, sm=DATA.keys(), release="R1", ignore="{ignore}"
+        ),
+        qv_r2=expand(
+            rules.calculate_qv.output, sm=DATA.keys(), release="R2", ignore="{ignore}"
+        ),
     output:
-        png=join(OUTPUT_DIR, "plots", "hprc_qv_comparison.png"),
+        qv=join(OUTPUT_DIR, "plots", "hprc_qv_comparison_{ignore}.tsv"),
+        png=join(OUTPUT_DIR, "plots", "hprc_qv_comparison_{ignore}.png"),
     params:
         script="workflow/scripts/compare_hprc/plot_qv_compare.py",
     conda:
@@ -121,7 +128,8 @@ rule plot_qv_comparison:
         python {params.script} \
         -a <(cat {input.qv_r1}) \
         -b <(cat {input.qv_r2}) \
-        -o {output.png}
+        -o {output.qv} \
+        -p {output.png}
         """
 
 
@@ -129,6 +137,11 @@ rule all:
     input:
         expand(rules.download_assemblies.output, sm=DATA.keys(), release=RELEASES),
         expand(rules.download_aligned_bams.output, sm=DATA.keys(), release=RELEASES),
-        expand(rules.calculate_qv.output, sm=DATA.keys(), release=RELEASES),
-        rules.plot_qv_comparison.output,
+        expand(
+            rules.calculate_qv.output,
+            sm=DATA.keys(),
+            release=RELEASES,
+            ignore=["scaffold", "none"],
+        ),
+        expand(rules.plot_qv_comparison.output, ignore=["scaffold", "none"]),
     default_target: True

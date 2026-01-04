@@ -259,17 +259,17 @@ rule plot_call_venn:
             rules.versioned_filter_vcf_calls.output, sm="HG002_{version}"
         )[0],
     output:
-        plot=join(OUTPUT_DIR, "call_ovl", "overlap_{version}.png"),
+        plot=join(OUTPUT_DIR, "call_ovl", "{version}_venn.png"),
     params:
         script="workflow/scripts/curated/call_venn_diagram.py",
+        output_prefix=lambda wc, output: join(dirname(output[0]), wc.version),
         json_inputs=lambda wc, input: json.dumps(dict(input)),
+    conda:
+        "../../envs/tools.yaml"
     shell:
         """
-        python {params.script} -i '{params.json_inputs}' -o {output.plot}
+        python {params.script} -i '{params.json_inputs}' -o {params.output_prefix}
         """
-
-
-# TODO: Consensus precision/recall as more callers added.
 
 
 include: "generate_ideogram.smk"

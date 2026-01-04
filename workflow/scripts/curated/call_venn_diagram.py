@@ -4,6 +4,7 @@ import argparse
 import polars as pl
 import matplotlib.pyplot as plt
 
+from typing import TextIO
 from intervaltree import Interval, IntervalTree
 from collections import defaultdict, Counter
 from supervenn import supervenn, make_sets_from_chunk_sizes
@@ -12,9 +13,12 @@ from supervenn import supervenn, make_sets_from_chunk_sizes
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("-i", "--input", type=str, help="JSON string of call maps.")
-    ap.add_argument("-o", "--output", type=str, help="Output plot.")
+    ap.add_argument(
+        "-o", "--output_prefix", type=str, default="out", help="Output prefix."
+    )
 
     args = ap.parse_args()
+    output_prefix = args.output_prefix
 
     calls: dict[str, str] = json.loads(args.input)
 
@@ -47,6 +51,7 @@ def main():
 
     ovl_counts: Counter[str] = Counter()
     all_ovls = set()
+    file_handles: dict[str, TextIO] = {}
     for chrom, itrees in itree_calls.items():
         itv: Interval
         ovl: set[Interval]
@@ -59,8 +64,24 @@ def main():
                 continue
             # Then create overlap name.
             ovl_name: str = "-".join(sorted(set(itv.data[1] for itv in ovl_sorted)))
+            if file_handles.get(ovl_name):
+                fh = file_handles[ovl_name]
+                print(
+                    chrom,
+                    *[
+                        f"{oitv.begin}\t{oitv.end}\t{oitv.data[0]}\t{oitv.data[1]}"
+                        for oitv in ovl
+                    ],
+                    sep="\t",
+                    file=fh,
+                )
+            else:
+                file_handles[ovl_name] = open(f"{output_prefix}_{ovl_name}.tsv", "wt")
             ovl_counts[ovl_name] += 1
             all_ovls.add(ovl_sorted)
+
+    for fh in file_handles.values():
+        fh.close()
 
     rows_ovl_counts = []
     for ovl_name, cnt in ovl_counts.items():
@@ -75,7 +96,7 @@ def main():
     fig, ax = plt.subplots(figsize=(16, 8), dpi=600, layout="constrained")
     sets, labels = make_sets_from_chunk_sizes(df_ovl_counts)
     supervenn(sets, labels, ax=ax)
-    fig.savefig(args.output, bbox_inches="tight")
+    fig.savefig(f"{output_prefix}_venn.png", bbox_inches="tight")
 
 
 if __name__ == "__main__":

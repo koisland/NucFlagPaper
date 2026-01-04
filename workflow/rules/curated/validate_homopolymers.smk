@@ -233,7 +233,7 @@ rule plot_mapq_with_consensus:
     params:
         script="workflow/scripts/curated/mapq_consensus_breakdown.py",
     conda:
-        "../../envs/curated.yaml"
+        "../../envs/tools.yaml"
     shell:
         """
         bedtools intersect -a {input.calls} -b {input.mapq} -wa -wb > {output.bed}
