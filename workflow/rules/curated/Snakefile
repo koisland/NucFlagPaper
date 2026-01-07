@@ -265,7 +265,7 @@ rule plot_call_venn:
         output_prefix=lambda wc, output: join(dirname(output[0]), wc.version),
         json_inputs=lambda wc, input: json.dumps(dict(input)),
     conda:
-        "../../envs/tools.yaml"
+        "../../envs/curated.yaml"
     shell:
         """
         python {params.script} -i '{params.json_inputs}' -o {params.output_prefix}

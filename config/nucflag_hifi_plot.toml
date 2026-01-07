@@ -1,6 +1,6 @@
 [general]
 log_level = "info"
-bp_merge = 1000
+bp_merge = 1
 bp_wg_window = 5_000_000
 bp_min_aln_length = 1
 ignore_boundaries = true

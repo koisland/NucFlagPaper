@@ -95,15 +95,13 @@ rule calculate_qv:
     output:
         qv=join(
             OUTPUT_DIR,
-            "{sm}_{release}_{ignore}.qv.bed",
+            "{sm}_{release}.qv.bed",
         ),
-    params:
-        ignore=lambda wc: f"-c {wc.ignore}" if wc.ignore != "none" else "",
     conda:
         "../Snakemake-NucFlag/workflow/env/nucflag.yaml"
     shell:
         """
-        nucflag qv -i {input.calls} {params.ignore} > {output.qv}
+        nucflag qv -i {input.calls} -c scaffold > {output.qv}
         """
 
 
@@ -111,14 +109,18 @@ rule calculate_qv:
 rule plot_qv_comparison:
     input:
         qv_r1=expand(
-            rules.calculate_qv.output, sm=DATA.keys(), release="R1", ignore="{ignore}"
+            rules.calculate_qv.output,
+            sm=DATA.keys(),
+            release="R1",
         ),
         qv_r2=expand(
-            rules.calculate_qv.output, sm=DATA.keys(), release="R2", ignore="{ignore}"
+            rules.calculate_qv.output,
+            sm=DATA.keys(),
+            release="R2",
         ),
     output:
-        qv=join(OUTPUT_DIR, "plots", "hprc_qv_comparison_{ignore}.tsv"),
-        png=join(OUTPUT_DIR, "plots", "hprc_qv_comparison_{ignore}.png"),
+        qv=join(OUTPUT_DIR, "plots", "hprc_qv_comparison.tsv"),
+        png=join(OUTPUT_DIR, "plots", "hprc_qv_comparison.png"),
     params:
         script="workflow/scripts/compare_hprc/plot_qv_compare.py",
     conda:
@@ -141,7 +143,6 @@ rule all:
             rules.calculate_qv.output,
             sm=DATA.keys(),
             release=RELEASES,
-            ignore=["scaffold", "none"],
         ),
-        expand(rules.plot_qv_comparison.output, ignore=["scaffold", "none"]),
+        rules.plot_qv_comparison.output,
     default_target: True

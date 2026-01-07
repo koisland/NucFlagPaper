@@ -57,6 +57,12 @@ rule run_deepvariant:
 Filter VCF calls to those that PASS
 Also consider GQ?
 * https://github.com/google/deepvariant/issues/503
+* https://github.com/google/deepvariant/issues/278
+
+DeepPolisher defines a filter threshold based on variant type.
+* https://pmc.ncbi.nlm.nih.gov/articles/PMC12212083/#SM1
+* From Q100 manuscript:
+    * 'GQ > 20 for 1bp insertions, GQ > 12 for 1bp deletions, and GQ > 5 for all other edit sizes, as recommended in Mastoras et al.48'
 """
 
 

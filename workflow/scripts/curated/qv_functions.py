@@ -1,9 +1,8 @@
-from requests.compat import str
-from matplotlib.axes import Axes
 import sys
 import matplotlib.pyplot as plt
 
 from math import log10
+from matplotlib.axes import Axes
 
 
 # Merqury's QV metric.

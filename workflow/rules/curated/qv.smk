@@ -36,10 +36,10 @@ rule calculate_nucflag_qv:
     conda:
         "../Snakemake-NucFlag/workflow/env/nucflag.yaml"
     log:
-        os.path.join(LOGS_DIR, "run_nucflag_element_HG002_{version}.log"),
+        os.path.join(LOGS_DIR, "run_nucflag_qv_HG002_{version}.log"),
     shell:
         """
-        nucflag qv -i {input.calls} > {output.qv} 2> {log}
+        nucflag qv -i {input.calls} -c scaffold > {output.qv} 2> {log}
         """
 
 
@@ -81,10 +81,11 @@ rule plot_nucflag_merqury_qv_plot:
             sm=[f"HG002_{v}" for v in reversed(ASSEMBLIES.keys())],
         ),
         nucflag_qv=expand(
-            rules.calculate_nucflag_qv.output.qv, version=reversed(ASSEMBLIES.keys())
+            rules.calculate_nucflag_qv.output.qv,
+            version=reversed(ASSEMBLIES.keys()),
         ),
     output:
-        plot=join(OUTPUT_DIR, "qv", "HG002_qv_{cond}.png"),
+        plot=join(OUTPUT_DIR, "qv", "HG002_qv.png"),
     conda:
         "../../envs/curated.yaml"
     params:
@@ -95,11 +96,8 @@ rule plot_nucflag_merqury_qv_plot:
         ),
         labels=" ".join(reversed(ASSEMBLIES.keys())),
         colors=" ".join(["blue", "green", "red"]),
-        omit_acrocentrics=lambda wc: (
-            "--omit-acrocentrics" if wc.cond == "omit_acro" else ""
-        ),
     log:
-        os.path.join(LOGS_DIR, "plot_nucflag_merqury_qv_plot_{cond}.log"),
+        os.path.join(LOGS_DIR, "plot_nucflag_merqury_qv_plot.log"),
     shell:
         """
         python {input.script} \
@@ -107,7 +105,8 @@ rule plot_nucflag_merqury_qv_plot:
         -y {params.nucflag_infiles} \
         -l {params.labels} \
         -c {params.colors} \
-        -o {output.plot} {params.omit_acrocentrics} 2> {log}
+        -o {output.plot} \
+        --highlight-acrocentrics 2> {log}
         """
 
 
@@ -115,5 +114,5 @@ rule qv_run_all:
     input:
         rules.qv_all.input,
         rules.plot_qv_functions.output,
-        expand(rules.plot_nucflag_merqury_qv_plot.output, cond=["omit_acro", "default"]),
+        rules.plot_nucflag_merqury_qv_plot.output,
     default_target: True

@@ -160,9 +160,7 @@ def main():
         color_key.pop("false_positive")
     else:
         dfs_calls = [
-            df.with_columns(
-                pl.col("type").str.replace("false_positive", "unclear")
-            ).with_columns(pl.col("type").cast(pl.Enum(CALL_COLOR_KEY.keys())))
+            df.with_columns(pl.col("type").cast(pl.Enum(CALL_COLOR_KEY.keys())))
             for df in dfs_calls
         ]
         color_key = CALL_COLOR_KEY

@@ -109,10 +109,10 @@ def main():
     ap.add_argument("--xlabel", default="QV (Merqury)", help="x-label", type=str)
     ap.add_argument("--ylabel", default="QV (NucFlag)", help="y-label", type=str)
     ap.add_argument(
-        "--omit-acrocentrics",
-        dest="omit_acrocentrics",
+        "--highlight-acrocentrics",
+        dest="highlight_acrocentrics",
         action="store_true",
-        help="Omit acrocentric chromosomes.",
+        help="Highlight acrocentric chromosomes.",
     )
     ap.add_argument("-o", "--output", required=True, help="Output plot.", type=str)
 
@@ -148,12 +148,6 @@ def main():
         df_all = df_x.join(df_y, on="chrom", how="inner").filter(
             pl.col("chrom").str.contains_any(["MATERNAL", "PATERNAL"])
         )
-        if args.omit_acrocentrics:
-            df_all = df_all.filter(
-                ~pl.col("chrom").str.contains_any(
-                    ["chr13", "chr14", "chr15", "chr21", "chr22"]
-                )
-            )
 
         p = sns.jointplot(
             df_all,
@@ -166,7 +160,7 @@ def main():
             line_kws=dict(color=color, linestyle="dotted"),
         )
         # Highlight how acrocentric chromosomes are the outliers
-        if not args.omit_acrocentrics:
+        if args.highlight_acrocentrics:
             df_acro_chrs = df_all.filter(
                 pl.col("chrom").str.contains_any(
                     ["chr13", "chr14", "chr15", "chr21", "chr22"]
@@ -195,7 +189,7 @@ def main():
     for i, f in enumerate(figs):
         _ = SeabornFig2Grid(f, fig, gs[i])
 
-    if not args.omit_acrocentrics:
+    if args.highlight_acrocentrics:
         fig.legend(
             labels=["Acrocentric"],
             handles=[

@@ -2,6 +2,7 @@ import argparse
 import polars as pl
 import pyideogram as pyid
 import matplotlib.pyplot as plt
+import matplotlib.patheffects as pe
 
 from matplotlib.axes import Axes
 from matplotlib.patches import Patch
@@ -15,7 +16,7 @@ CALL_COLOR_KEY = {
 }
 CALL_NAMES = {
     "truth": "Truth",
-    "false_positive": "False Positive",
+    "false_positive": "Unclear",
     "true_positive": "True Positive",
     "false_negative": "False Negative",
 }
@@ -133,12 +134,17 @@ def main():
         ax_overview: Axes = axes_overview[i]
         df_calls = dfs_calls[i]
         type_counts = dict(df_calls["type"].value_counts().iter_rows())
+        total_counts = sum(type_counts.values())
         ax_overview.pie(
             type_counts.values(),
             colors=[CALL_COLOR_KEY[typ] for typ in type_counts.keys()],
             radius=1.0,
-            autopct=lambda pct: func(pct, dfs_calls[0].shape[0]),
-            textprops=dict(color="w", fontsize=12),
+            autopct=lambda pct: func(pct, total_counts),
+            textprops=dict(
+                color="black",
+                fontsize=8,
+                path_effects=[pe.withStroke(linewidth=2, foreground="white")],
+            ),
         )
         ax_overview.set_ylabel(tool, color=color, rotation=0, ha="right", fontsize=20)
 

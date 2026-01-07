@@ -42,7 +42,7 @@ rule format_cytoband:
     input:
         censat=rules.convert_to_bed.output.censat,
         cytoband=rules.convert_to_bed.output.cytoband,
-        fai=expand(rules.download_curated_asm.output.fai, version=f"v1.0.1")[0],
+        fai=expand(rules.download_curated_asm.output.fai, version="v1.0.1")[0],
     output:
         cytoband=join(IDEOGRAM_OUTPUT_DIR, "cytoBand.hg002v1.0.formatted.bed"),
     params:
@@ -75,7 +75,7 @@ rule plot_ideogram:
     input:
         script="workflow/scripts/metrics/plot_curated_ideogram.py",
         cytobands=rules.format_cytoband.output,
-        truth=expand(rules.convert_vcf_to_bed.output, version=f"v1.0.1"),
+        truth=expand(rules.convert_vcf_to_bed.output, version="v1.0.1"),
         nucflag_calls=join(
             expand(
                 rules.calculate_precision_recall.output.missed_calls_dir,
@@ -113,14 +113,15 @@ rule plot_ideogram:
         censat=rules.convert_to_bed.output.censat,
     output:
         plots=[
-            join(IDEOGRAM_OUTPUT_DIR, "ideogram.png"),
-            join(IDEOGRAM_OUTPUT_DIR, "ideogram_overview.png"),
-            join(IDEOGRAM_OUTPUT_DIR, "ideogram.pdf"),
+            join(IDEOGRAM_OUTPUT_DIR, "ideogram_{cond}.png"),
+            join(IDEOGRAM_OUTPUT_DIR, "ideogram_overview_{cond}.png"),
+            join(IDEOGRAM_OUTPUT_DIR, "ideogram_{cond}.pdf"),
         ],
     conda:
         "../../envs/tools.yaml"
     params:
         output_prefix=lambda wc, output: os.path.splitext(output.plots[0])[0],
+        include_false_positives=lambda wc: "-f" if wc.cond == "fp" else "",
     shell:
         """
         python {input.script} \
@@ -132,9 +133,12 @@ rule plot_ideogram:
         --deepvariant {input.deepvariant_calls} \
         --flagger {input.flagger_calls} \
         --segdups {input.segdups} \
-        --censat {input.censat} \
+        --censat {input.censat} {params.include_false_positives} \
         -o {params.output_prefix}
         """
+
+
+CHROMS = ["chrY_PATERNAL", "chr21_PATERNAL", "chr4_PATERNAL"]
 
 
 rule plot_ideogram_chrom:
@@ -176,8 +180,12 @@ rule plot_ideogram_chrom:
         ),
         segdups=rules.convert_to_bed.output.segdups,
         censat=rules.convert_to_bed.output.censat,
+    wildcard_constraints:
+        chrom="|".join(CHROMS),
     output:
-        plot=join(IDEOGRAM_OUTPUT_DIR, "{chrom}.png"),
+        plot=join(IDEOGRAM_OUTPUT_DIR, "{chrom}_{cond}.png"),
+    params:
+        include_false_positives=lambda wc: "-f" if wc.cond == "fp" else "",
     conda:
         "../../envs/tools.yaml"
     shell:
@@ -191,16 +199,17 @@ rule plot_ideogram_chrom:
         --deepvariant {input.deepvariant_calls} \
         --segdups {input.segdups} \
         --censat {input.censat} \
-        -o {output.plot} \
+        -o {output.plot} {params.include_false_positives} \
         -c {wildcards.chrom}
         """
 
 
 rule generate_ideogram:
     input:
-        rules.plot_ideogram.output,
+        expand(rules.plot_ideogram.output, cond=["fp", "none"]),
         expand(
             rules.plot_ideogram_chrom.output,
-            chrom=["chrY_PATERNAL", "chr21_PATERNAL", "chr4_PATERNAL"],
+            chrom=CHROMS,
+            cond=["fp", "none"],
         ),
     default_target: True
