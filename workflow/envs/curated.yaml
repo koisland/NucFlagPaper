@@ -21,3 +21,4 @@ dependencies:
   - pip:
     - supervenn
     - pyarrow
+    - scikit_posthocs

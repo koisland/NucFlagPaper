@@ -14,10 +14,10 @@ from collections import defaultdict, Counter
 from concurrent.futures import Future, ProcessPoolExecutor, as_completed
 
 NT_COLORS = {
-    "A": "#FF0000",
-    "T": "#0000FF",
-    "G": "#009600",
-    "C": "#D17105",
+    "A": "#009600",
+    "C": "#0000FF",
+    "G": "#D17105",
+    "T": "#FF0000",
     # False positive
     "N": "#000000",
 }
@@ -61,7 +61,7 @@ def draw_stacked_bars(
     max_homopolymer_length = max(max(lns.keys()) for _, lns in hp_bins.items())
     all_nt_homopolymer_cnts = np.zeros(max_homopolymer_length + 1)
     # https://matplotlib.org/stable/gallery/lines_bars_and_markers/bar_stacked.html
-    for nt, cnt in hp_bins.items():
+    for nt, cnt in sorted(hp_bins.items()):
         if override_color:
             color = override_color
         else:
@@ -147,7 +147,7 @@ def plot_homopolymers_split(
     # Draw all homopolymers as hatched bar
     max_homopolymer_length = max(max(lns.keys()) for _, lns in homopolymer_bins.items())
 
-    for i, (nt, cnt) in enumerate(homopolymer_bins.items()):
+    for i, (nt, cnt) in enumerate(sorted(homopolymer_bins.items())):
         color = NT_COLORS[nt]
         ax: Axes = axes[i]
         nt_homopolymer_ln = np.arange(max_homopolymer_length + 1)
@@ -231,6 +231,7 @@ def main():  #
         help="NucFlag calls.",
     )
     ap.add_argument("-o", "--outfile", default=sys.stdout, help="All homopolymers.")
+    ap.add_argument("-b", "--outfile_bin", default=None, help="All homopolymer bins.")
     ap.add_argument(
         "-x",
         "--outfile_incorrect",
@@ -331,6 +332,12 @@ def main():  #
             nt_homopolymer = itv_homopolymer.data
 
         homopolymer_bins[nt_homopolymer][len_homopolymer] += 1
+
+    if args.outfile_bin:
+        with open(args.outfile_bin, "wt") as fh:
+            for nt, cnt in homopolymer_bins.items():
+                for h_ln, h_cnt in cnt.items():
+                    print(nt, h_ln, h_cnt, sep="\t", file=fh)
 
     print("Homopolymers binned.", file=sys.stderr)
     # NucFlag overlap

@@ -54,15 +54,12 @@ rule run_deepvariant:
 
 
 """
-Filter VCF calls to those that PASS
-Also consider GQ?
+Filter VCF calls and convert to BED.
 * https://github.com/google/deepvariant/issues/503
 * https://github.com/google/deepvariant/issues/278
 
-DeepPolisher defines a filter threshold based on variant type.
-* https://pmc.ncbi.nlm.nih.gov/articles/PMC12212083/#SM1
 * From Q100 manuscript:
-    * 'GQ > 20 for 1bp insertions, GQ > 12 for 1bp deletions, and GQ > 5 for all other edit sizes, as recommended in Mastoras et al.48'
+    * Finally, 1,505 homozygous variant calls in the HiFi “all to all” DeepVariant set above (Table S2) were filtered to require GQ>=20 and DP<75
 """
 
 
@@ -74,9 +71,10 @@ rule filter_vcf_calls:
     shell:
         """
         zcat -f {input.vcf} | grep -v "#" | awk -v OFS="\\t" '{{
-            # TODO: Filter by GQ?
-            if ($7 != "PASS") {{ next }};
-            print $1, $2, $2 + length($4), $4"-"$5, 0, $3, $2, $2 + length($4), "0,0,0"
+            split($10, info, ":")
+            if ($7 == "PASS") {{
+                print $1, $2, $2 + length($4), $4"-"$5, gq, $3, $2, $2 + length($4), "0,0,0"
+            }}
         }}' > {output}
         """
 

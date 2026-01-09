@@ -10,6 +10,14 @@ from collections import defaultdict, Counter
 from supervenn import supervenn, make_sets_from_chunk_sizes
 
 
+RENAME_TOOLS = {
+    "nucflag": "NucFlag v1.0",
+    "flagger": "HMM-Flagger v1.1.0",
+    "inspector": "Inspector v1.3",
+    "deepvariant": "DeepVariant v1.9 (FILTER=='PASS')",
+}
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("-i", "--input", type=str, help="JSON string of call maps.")
@@ -88,6 +96,8 @@ def main():
         row = {tool: False for tool in calls.keys()}
         for tool in ovl_name.split("-"):
             row[tool] = True
+        # Rename
+        row = {RENAME_TOOLS[tool]: value for tool, value in row.items()}
         row["size"] = cnt
         rows_ovl_counts.append(row)
 
@@ -95,7 +105,13 @@ def main():
 
     fig, ax = plt.subplots(figsize=(16, 8), dpi=600, layout="constrained")
     sets, labels = make_sets_from_chunk_sizes(df_ovl_counts)
-    supervenn(sets, labels, ax=ax)
+    supervenn(
+        sets,
+        labels,
+        ax=ax,
+        min_width_for_annotation=600,
+        fontsize=8,
+    )
     fig.savefig(f"{output_prefix}_venn.png", bbox_inches="tight")
 
 

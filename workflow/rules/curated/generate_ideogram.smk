@@ -76,37 +76,25 @@ rule plot_ideogram:
         script="workflow/scripts/metrics/plot_curated_ideogram.py",
         cytobands=rules.format_cytoband.output,
         truth=expand(rules.convert_vcf_to_bed.output, version="v1.0.1"),
-        nucflag_calls=join(
-            expand(
-                rules.calculate_precision_recall.output.missed_calls_dir,
-                tool="nucflag",
-                version="v1.0.1",
-            )[0],
-            "missed_calls.bed",
+        nucflag_calls=expand(
+            rules.calculate_precision_recall.output.missed_calls_dir,
+            tool="nucflag",
+            version="v1.0.1",
         ),
-        inspector_calls=join(
-            expand(
-                rules.calculate_precision_recall.output.missed_calls_dir,
-                tool="inspector",
-                version="v1.0.1",
-            )[0],
-            "missed_calls.bed",
+        inspector_calls=expand(
+            rules.calculate_precision_recall.output.missed_calls_dir,
+            tool="inspector",
+            version="v1.0.1",
         ),
-        flagger_calls=join(
-            expand(
-                rules.calculate_precision_recall.output.missed_calls_dir,
-                tool="flagger",
-                version="v1.0.1",
-            )[0],
-            "missed_calls.bed",
+        flagger_calls=expand(
+            rules.calculate_precision_recall.output.missed_calls_dir,
+            tool="flagger",
+            version="v1.0.1",
         ),
-        deepvariant_calls=join(
-            expand(
-                rules.calculate_precision_recall.output.missed_calls_dir,
-                tool="deepvariant",
-                version="v1.0.1",
-            )[0],
-            "missed_calls.bed",
+        deepvariant_calls=expand(
+            rules.calculate_precision_recall.output.missed_calls_dir,
+            tool="deepvariant",
+            version="v1.0.1",
         ),
         fai=expand(rules.download_curated_asm.output.fai, version=f"v1.0.1")[0],
         segdups=rules.convert_to_bed.output.segdups,
@@ -114,7 +102,7 @@ rule plot_ideogram:
     output:
         plots=[
             join(IDEOGRAM_OUTPUT_DIR, "ideogram_{cond}.png"),
-            join(IDEOGRAM_OUTPUT_DIR, "ideogram_overview_{cond}.png"),
+            join(IDEOGRAM_OUTPUT_DIR, "ideogram_{cond}_overview.png"),
             join(IDEOGRAM_OUTPUT_DIR, "ideogram_{cond}.pdf"),
         ],
     conda:
@@ -128,10 +116,10 @@ rule plot_ideogram:
         --fai {input.fai} \
         --cytobands {input.cytobands} \
         --truth {input.truth} \
-        --nucflag {input.nucflag_calls} \
-        --inspector {input.inspector_calls} \
-        --deepvariant {input.deepvariant_calls} \
-        --flagger {input.flagger_calls} \
+        --nucflag {input.nucflag_calls}/missed_calls.bed \
+        --inspector {input.inspector_calls}/missed_calls.bed \
+        --deepvariant {input.deepvariant_calls}/missed_calls.bed \
+        --flagger {input.flagger_calls}/missed_calls.bed \
         --segdups {input.segdups} \
         --censat {input.censat} {params.include_false_positives} \
         -o {params.output_prefix}
@@ -146,37 +134,25 @@ rule plot_ideogram_chrom:
         script="workflow/scripts/metrics/plot_curated_ideogram_chrom.py",
         cytobands=rules.format_cytoband.output,
         truth=expand(rules.convert_vcf_to_bed.output, version=f"v1.0.1"),
-        nucflag_calls=join(
-            expand(
-                rules.calculate_precision_recall.output.missed_calls_dir,
-                tool="nucflag",
-                version="v1.0.1",
-            )[0],
-            "missed_calls.bed",
+        nucflag_calls=expand(
+            rules.calculate_precision_recall.output.missed_calls_dir,
+            tool="nucflag",
+            version="v1.0.1",
         ),
-        inspector_calls=join(
-            expand(
-                rules.calculate_precision_recall.output.missed_calls_dir,
-                tool="inspector",
-                version="v1.0.1",
-            )[0],
-            "missed_calls.bed",
+        inspector_calls=expand(
+            rules.calculate_precision_recall.output.missed_calls_dir,
+            tool="inspector",
+            version="v1.0.1",
         ),
-        flagger_calls=join(
-            expand(
-                rules.calculate_precision_recall.output.missed_calls_dir,
-                tool="flagger",
-                version="v1.0.1",
-            )[0],
-            "missed_calls.bed",
+        flagger_calls=expand(
+            rules.calculate_precision_recall.output.missed_calls_dir,
+            tool="flagger",
+            version="v1.0.1",
         ),
-        deepvariant_calls=join(
-            expand(
-                rules.calculate_precision_recall.output.missed_calls_dir,
-                tool="deepvariant",
-                version="v1.0.1",
-            )[0],
-            "missed_calls.bed",
+        deepvariant_calls=expand(
+            rules.calculate_precision_recall.output.missed_calls_dir,
+            tool="deepvariant",
+            version="v1.0.1",
         ),
         segdups=rules.convert_to_bed.output.segdups,
         censat=rules.convert_to_bed.output.censat,
@@ -193,10 +169,10 @@ rule plot_ideogram_chrom:
         python {input.script} \
         --cytobands {input.cytobands} \
         --truth {input.truth} \
-        --nucflag {input.nucflag_calls} \
-        --inspector {input.inspector_calls} \
-        --flagger {input.flagger_calls} \
-        --deepvariant {input.deepvariant_calls} \
+        --nucflag {input.nucflag_calls}/missed_calls.bed \
+        --inspector {input.inspector_calls}/missed_calls.bed \
+        --flagger {input.flagger_calls}/missed_calls.bed \
+        --deepvariant {input.deepvariant_calls}/missed_calls.bed \
         --segdups {input.segdups} \
         --censat {input.censat} \
         -o {output.plot} {params.include_false_positives} \
