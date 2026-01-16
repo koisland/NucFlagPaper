@@ -20,6 +20,7 @@ include: "rules/simulate_misassemblies.smk"
 include: "rules/compare_aligners.smk"
 include: "rules/check_curated.smk"
 include: "rules/compare_hprc.smk"
+include: "rules/nonhuman.smk"
 
 
 outputs = [
@@ -28,6 +29,7 @@ outputs = [
     rules.aln_cmp_all.input,
     rules.hg002_curated_all.input,
     rules.hprc_all.input,
+    rules.nonhuman_all.input,
 ]
 
 

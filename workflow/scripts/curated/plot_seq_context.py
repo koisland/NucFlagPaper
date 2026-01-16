@@ -9,11 +9,6 @@ COLS = [
     "st",
     "end",
     "name",
-    "cov",
-    "strand",
-    "tst",
-    "tend",
-    "item_rgb",
     "ochrom",
     "ost",
     "oend",
@@ -37,6 +32,7 @@ DF_CENSAT_COLORS = pl.DataFrame(
             "#990000",
             "#91ff00",
             "#ff9200",
+            "#808080",
         ],
         "oname": [
             "hsat1B",
@@ -53,22 +49,25 @@ DF_CENSAT_COLORS = pl.DataFrame(
             "dhor",
             "hsat1A",
             "hor",
+            "no_overlap",
         ],
     }
 )
 CENSAT_COLORS = dict(DF_CENSAT_COLORS.select("oname", "item_rgb").iter_rows())
 DF_SEGDUP_COLORS = pl.DataFrame(
     {
-        "item_rgb": ["#800080", "#808080", "#ffff00ff", "#ffa500"],
+        "item_rgb": ["#800080", "#808080", "#ffff00ff", "#ffa500", "#000000"],
         "oname": [
             r"Less than 90% similarity",
             r"90 - 98% similarity",
             r"98 - 99% similarity",
             r"Greater than 99% similarity",
+            "Other",
         ],
     }
 )
 SEGDUP_COLORS = dict(DF_SEGDUP_COLORS.select("oname", "item_rgb").iter_rows())
+CORRECT_CALLS = {"good", "correct", "Hap"}
 
 
 def rgb_to_hex(srs: pl.Series) -> pl.Series:
@@ -85,84 +84,68 @@ def rgb_to_hex(srs: pl.Series) -> pl.Series:
 
 def main():
     chrom = sys.argv[1]
+    calls = sys.argv[2]
+    censat = sys.argv[3]
+    segdup = sys.argv[4]
+    output_prefix = sys.argv[5]
+
     df_censat = (
         pl.read_csv(
-            "/project/logsdon_shared/projects/Keith/NucFlagPaper/results/curated/seq_ctx/ovl_censat.bed",
+            censat,
             separator="\t",
             new_columns=COLS,
             has_header=False,
         )
+        .filter(~pl.col("name").is_in(CORRECT_CALLS))
         .unique(subset=["chrom", "st", "end", "name", "oname", "oitem_rgb"])
-        # Handle false misjoin due to windowing.
-        .filter(
-            ~(
-                pl.col("st").eq(5000000)
-                & pl.col("end").eq(5000001)
-                & pl.col("name").eq("misjoin")
-            )
-        )
         .with_columns(
             item_rgb=pl.col("oitem_rgb").map_batches(
                 rgb_to_hex, return_dtype=pl.String
             ),
-            # Correct for change in misjoin label.
-            name=pl.when((pl.col("name") == "misjoin") & (pl.col("cov") != 0))
-            .then(pl.lit("indel"))
-            .otherwise(pl.col("name")),
         )
     )
     df_segdup = (
         pl.read_csv(
-            "/project/logsdon_shared/projects/Keith/NucFlagPaper/results/curated/seq_ctx/ovl_segdup.bed",
+            segdup,
             separator="\t",
             new_columns=COLS,
             has_header=False,
         )
-        .filter(
-            ~(
-                pl.col("st").eq(5000000)
-                & pl.col("end").eq(5000001)
-                & pl.col("name").eq("misjoin")
-            )
-        )
         .with_columns(
-            oname=pl.when(pl.col("oname") < 0.9)
+            oname=pl.when(pl.col("oname") == "no_overlap")
+            .then(pl.lit(0.0))
+            .otherwise(pl.col("oname"))
+            .cast(pl.Float64)
+        )
+        .filter(~pl.col("name").is_in(CORRECT_CALLS))
+        .with_columns(
+            oname=pl.when(pl.col("oname") == 0.0)
+            .then(pl.lit("Other"))
+            .when(pl.col("oname") < 0.9)
             .then(pl.lit(r"Less than 90% similarity"))
             .when(pl.col("oname").is_between(0.9, 0.98))
             .then(pl.lit(r"90 - 98% similarity"))
             .when(pl.col("oname").is_between(0.98, 0.99))
             .then(pl.lit(r"98 - 99% similarity"))
             .otherwise(pl.lit(r"Greater than 99% similarity")),
-            # Correct for change in misjoin label.
-            name=pl.when((pl.col("name") == "misjoin") & (pl.col("cov") != 0))
-            .then(pl.lit("indel"))
-            .otherwise(pl.col("name")),
         )
         .unique(subset=["chrom", "st", "end", "name", "oname", "oitem_rgb"])
-        .drop("item_rgb")
         .join(DF_SEGDUP_COLORS, on="oname")
     )
-    df_misassemblies = (
-        pl.read_csv(
-            "/project/logsdon_shared/projects/Keith/NucFlagPaper/results/curated/HG002_v1.0.1_misassemblies.bed",
-            separator="\t",
-            new_columns=COLS[0:9],
-            has_header=False,
-        )
-        .filter(pl.col("name") != "good")
-        .filter(
-            ~(
-                pl.col("st").eq(5000000)
-                & pl.col("end").eq(5000001)
-                & pl.col("name").eq("misjoin")
-            )
-        )
-        .with_columns(
-            name=pl.when((pl.col("name") == "misjoin") & (pl.col("cov") != 0))
-            .then(pl.lit("indel"))
-            .otherwise(pl.col("name"))
-        )
+    kwargs = dict(
+        separator="\t",
+        new_columns=COLS[0:4],
+        has_header=False,
     )
+    try:
+        df_misassemblies = pl.read_csv(
+            calls, comment_prefix="#", **kwargs, columns=range(0, 4)
+        ).filter(~pl.col("name").is_in(CORRECT_CALLS))
+    except (pl.exceptions.ShapeError, pl.exceptions.OutOfBoundsError):
+        # flagger
+        df_misassemblies = pl.read_csv(
+            calls, comment_prefix="track", **kwargs, columns=range(0, 4)
+        ).filter(~pl.col("name").is_in(CORRECT_CALLS))
 
     if chrom != "all":
         df_censat = df_censat.filter(pl.col("chrom") == chrom)
@@ -217,9 +200,7 @@ def main():
     )
 
     ax_censat.set_ylabel("Sequence type")
-    ax_censat.set_xlabel("NucFlag misassembly")
-    df_censat_total.to_csv(f"censat_{chrom}.tsv", sep="\t", index=True)
-    fig_censat.savefig(f"censat_{chrom}.png", bbox_inches="tight")
+    ax_censat.set_xlabel("Misassembly")
 
     fig_segdup, ax_segdup = plt.subplots(figsize=(16, 8))
     sns.heatmap(
@@ -239,9 +220,7 @@ def main():
     )
 
     ax_segdup.set_ylabel("Segmental duplication similarity")
-    ax_segdup.set_xlabel("NucFlag misassembly")
-    df_segdup_total.to_csv(f"segdup_{chrom}.tsv", sep="\t", index=True)
-    fig_segdup.savefig(f"segdup_{chrom}.png", bbox_inches="tight")
+    ax_segdup.set_xlabel("Misassembly")
 
     fig, ax = plt.subplots(figsize=(4, 4))
     df_misassemblies_total = (
@@ -267,8 +246,16 @@ def main():
     ax.set_xticklabels(
         ax.get_xticklabels(), rotation=45, ha="right", rotation_mode="anchor"
     )
-    df_misassemblies_total.write_csv(f"all_{chrom}.tsv", separator="\t")
-    fig.savefig(f"all_{chrom}.png", bbox_inches="tight")
+
+    df_misassemblies_total.write_csv(
+        f"{output_prefix}_total_{chrom}.tsv", separator="\t"
+    )
+    df_segdup_total.to_csv(f"{output_prefix}_segdup_{chrom}.tsv", sep="\t", index=True)
+    df_censat_total.to_csv(f"{output_prefix}_censat_{chrom}.tsv", sep="\t", index=True)
+
+    fig.savefig(f"{output_prefix}_total_{chrom}.png", bbox_inches="tight")
+    fig_segdup.savefig(f"{output_prefix}_segdup_{chrom}.png", bbox_inches="tight")
+    fig_censat.savefig(f"{output_prefix}_censat_{chrom}.png", bbox_inches="tight")
 
 
 if __name__ == "__main__":

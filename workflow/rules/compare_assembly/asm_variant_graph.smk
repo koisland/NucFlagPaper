@@ -124,6 +124,7 @@ Visualize with Bandage and IGV
 """
 
 
+# TODO: Ratio between small and large allele in bubbles to pick up larger errors. Also plot.
 rule intersect_bubbles_w_calls:
     input:
         bed=expand(

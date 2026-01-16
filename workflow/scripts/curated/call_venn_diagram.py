@@ -1,5 +1,6 @@
 import json
 import argparse
+import matplotlib.colors
 
 import polars as pl
 import matplotlib.pyplot as plt
@@ -16,6 +17,7 @@ RENAME_TOOLS = {
     "inspector": "Inspector v1.3",
     "deepvariant": "DeepVariant v1.9 (FILTER=='PASS')",
 }
+COLORS = ["purple", "magenta", "teal", "maroon"]
 
 
 def main():
@@ -105,12 +107,14 @@ def main():
 
     fig, ax = plt.subplots(figsize=(16, 8), dpi=600, layout="constrained")
     sets, labels = make_sets_from_chunk_sizes(df_ovl_counts)
+    colors = [matplotlib.colors.to_rgba(color, alpha=0.5) for color in COLORS]
     supervenn(
         sets,
         labels,
         ax=ax,
         min_width_for_annotation=600,
         fontsize=8,
+        color_cycle=colors,
     )
     fig.savefig(f"{output_prefix}_venn.png", bbox_inches="tight")
 

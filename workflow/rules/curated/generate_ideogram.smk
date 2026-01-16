@@ -126,9 +126,6 @@ rule plot_ideogram:
         """
 
 
-CHROMS = ["chrY_PATERNAL", "chr21_PATERNAL", "chr4_PATERNAL"]
-
-
 rule plot_ideogram_chrom:
     input:
         script="workflow/scripts/metrics/plot_curated_ideogram_chrom.py",

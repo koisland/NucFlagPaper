@@ -33,12 +33,9 @@ SUMMARY_OUTPUT_DIR = join(OUTPUT_DIR, "summary")
 LOG_DIR = config["logs_dir"]
 NUCFLAG_LOG_DIR = join(LOG_DIR, "nucflag")
 MISASIM_LOG_DIR = join(LOG_DIR, "simulated")
-SUMMARY_LOG_DIR = join(LOG_DIR, "summary")
 
 BENCHMARK_DIR = config["benchmarks_dir"]
 NUCFLAG_BENCHMARK_DIR = join(BENCHMARK_DIR, "nucflag")
-MISASIM_BENCHMARK_DIR = join(BENCHMARK_DIR, "simulated")
-SUMMARY_BENCHMARK_DIR = join(BENCHMARK_DIR, "summary")
 
 
 DOWNSAMPLE_PERC = config.get("downsample_perc", [0.50, 0.33])
@@ -429,6 +426,35 @@ rule plot_precision_recall_xy:
         """
 
 
+rule generate_benchmarks:
+    input:
+        [
+            rules.nucflag.input,
+            rules.flagger.input,
+            rules.inspector.input,
+        ],
+    output:
+        join(OUTPUT_DIR, "benchmark_plots", "rss.png"),
+        join(OUTPUT_DIR, "benchmark_plots", "minutes.png"),
+    params:
+        benchmark_dir_args=" ".join(
+            [
+                f"{f} benchmarks/{tool}"
+                for (f, tool) in [
+                    ("-i", "inspector"),
+                    ("-f", "flagger"),
+                    ("-i", "inspector"),
+                ]
+            ]
+        ),
+        script="workflow/scripts/metrics/aggregate_benchmarks.py",
+        output_dir=lambda wc, output: dirname(output[0]),
+    shell:
+        """
+        python {params.script} {params.benchmark_dir_args} -o {params.output_dir}
+        """
+
+
 rule all:
     input:
         rules.nucflag.input,
@@ -439,4 +465,5 @@ rule all:
         expand(rules.calculate_precision_recall_flagger.output, sm=SAMPLES),
         expand(rules.plot_precision_recall.output, sm=SAMPLES),
         expand(rules.plot_precision_recall_xy.output, sm=SAMPLES),
+        rules.generate_benchmarks.output,
     default_target: True

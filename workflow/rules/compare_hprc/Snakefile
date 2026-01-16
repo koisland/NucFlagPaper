@@ -120,6 +120,7 @@ rule plot_qv_comparison:
         ),
     output:
         qv=join(OUTPUT_DIR, "plots", "hprc_qv_comparison.tsv"),
+        dt_qv=join(OUTPUT_DIR, "plots", "hprc_dt_qv_comparison.tsv"),
         png=join(OUTPUT_DIR, "plots", "hprc_qv_comparison.png"),
     params:
         script="workflow/scripts/compare_hprc/plot_qv_compare.py",
@@ -130,8 +131,29 @@ rule plot_qv_comparison:
         python {params.script} \
         -a <(cat {input.qv_r1}) \
         -b <(cat {input.qv_r2}) \
+        -d {output.dt_qv} \
         -o {output.qv} \
         -p {output.png}
+        """
+
+
+# UL ont coverage increases by 3.2 fold.
+rule plot_ul_ont:
+    input:
+        mdata_r1="data/compare_hprc/hprc_r1_data.tsv.gz",
+        mdata_r2="data/compare_hprc/hprc_r2_data.csv.gz",
+    output:
+        plot=join(OUTPUT_DIR, "plots", "hprc_ul_ont.png"),
+    params:
+        script="workflow/scripts/compare_hprc/summarize_ul_ont_diff.py",
+    conda:
+        "../../envs/tools.yaml"
+    shell:
+        """
+        python {params.script} \
+        {input.mdata_r1} \
+        {input.mdata_r2} \
+        {output.plot}
         """
 
 
@@ -145,4 +167,5 @@ rule all:
             release=RELEASES,
         ),
         rules.plot_qv_comparison.output,
+        rules.plot_ul_ont.output,
     default_target: True

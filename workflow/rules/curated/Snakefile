@@ -31,10 +31,12 @@ ELEMENT = {
     "R1": "s3://human-pangenomics/T2T/scratch/HG002/sequencing/element/trio/HG002/ins1000/ASHG-C063_R1.fastq.gz",
     "R2": "s3://human-pangenomics/T2T/scratch/HG002/sequencing/element/trio/HG002/ins1000/ASHG-C063_R2.fastq.gz",
 }
+CHROMS = ["chrY_PATERNAL", "chr21_PATERNAL", "chr4_PATERNAL"]
 
 
 wildcard_constraints:
     version="|".join(ASSEMBLIES.keys()),
+    chrom="|".join(CHROMS),
 
 
 rule download_vcf:
@@ -275,6 +277,7 @@ rule plot_call_venn:
 include: "generate_ideogram.smk"
 include: "validate_homopolymers.smk"
 include: "qv.smk"
+include: "plot_sequence_context.smk"
 
 
 rule all:
@@ -292,5 +295,6 @@ rule all:
         ),
         rules.generate_ideogram.input,
         rules.validate_homopolymers_all.input,
+        rules.sequence_context_all.input,
         rules.qv_run_all.input,
     default_target: True

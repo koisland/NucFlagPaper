@@ -35,6 +35,7 @@ def main():
     ap.add_argument("-ca", "--color_a", type=str, default="red", help="Color for a.")
     ap.add_argument("-cb", "--color_b", type=str, default="blue", help="Color for b.")
     ap.add_argument("-o", "--output_qv", type=str, default=sys.stdout)
+    ap.add_argument("-d", "--output_dt_qv", type=str, default=None)
     ap.add_argument("-p", "--output_plot", type=str, default="out.png")
 
     args = ap.parse_args()
@@ -176,6 +177,21 @@ def main():
     fig.savefig(args.output_plot, bbox_inches="tight", dpi=600)
 
     df_qv = pl.concat(dfs_qv)
+    if args.output_dt_qv:
+        df_dt_qv = (
+            df_qv.with_columns(qv=(pl.col("x") + pl.col("y")) / 2.0)
+            .pivot(index="sm", on="label", values="qv")
+            .with_columns(dt_qv=pl.col("b") - pl.col("a"))
+            .select("sm", "dt_qv")
+        )
+        prop_increasing = (
+            df_dt_qv["dt_qv"].filter(df_dt_qv["dt_qv"] > 0).count()
+            / df_dt_qv["dt_qv"].len()
+        )
+        print(f"Median QV increase: {df_dt_qv['dt_qv'].median()}", file=sys.stderr)
+        print(f"Ratio increasing: {prop_increasing}", file=sys.stderr)
+        df_dt_qv.write_csv(args.output_dt_qv, include_header=False, separator="\t")
+
     df_qv.write_csv(args.output_qv, separator="\t")
 
 

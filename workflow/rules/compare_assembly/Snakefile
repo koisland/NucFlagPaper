@@ -79,6 +79,7 @@ use rule * from NucFlagDenovoAsm as nf_denovo_*
 
 include: "asm_variant_graph.smk"
 include: "compare_homopolymers.smk"
+include: "draw_ng50.smk"
 
 
 rule all:
@@ -87,3 +88,4 @@ rule all:
         rules.vg_all.input,
         rules.cmp_homopolymers_all.input,
         rules.nf_denovo_nucflag.input,
+        rules.draw_ng50.output,

@@ -6,7 +6,6 @@ alignment
 results/
 benchmarks/
 logs/
-data/
 
 *.done
 inspector

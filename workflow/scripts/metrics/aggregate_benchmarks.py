@@ -1,6 +1,7 @@
 import os
 import glob
 import argparse
+import matplotlib.colors
 import polars as pl
 import seaborn as sns
 
@@ -9,6 +10,12 @@ RGX_STEP_SM_DTYPE = r"(?<step>^.*)_(?<sample>.*?)_(?<dtype>hifi|ont_r10|ont_r9)"
 RGX_MTYPE_NUM_LEN = (
     r"(?<mtype>false_duplication|misjoin|inversion)-(?<num>\d+)-(?<len>\d+)"
 )
+TOOL_NAMES = [
+    "NucFlag v1.0\n(CRAM)",
+    "Inspector v1.3",
+    "HMM-Flagger v1.1.0",
+]
+TOOL_COLORS = ["purple", "teal", "magenta"]
 
 
 def read_files(fglob: str) -> pl.DataFrame:
@@ -53,74 +60,86 @@ def read_files(fglob: str) -> pl.DataFrame:
 def plot_agg(df: pl.DataFrame, y: str, order: list[str]) -> sns.FacetGrid:
     height = 3
     aspect_ratio = 1.5
+    colors = dict(
+        zip(
+            TOOL_NAMES,
+            [matplotlib.colors.to_rgba(color, alpha=0.5) for color in TOOL_COLORS],
+        )
+    )
     g = sns.catplot(
         data=df,
-        x="method",
+        x="Method",
         y=y,
-        row="dtype",
-        col="mtype",
+        row="Data",
+        col="Misassembly",
         order=order,
         hue_order=order,
-        palette="pastel",
+        palette=colors,
         kind="box",
-        hue="method",
+        hue="Method",
         height=height,
         aspect=aspect_ratio,
     )
     # https://stackoverflow.com/a/69398767
     g.map(
-        sns.swarmplot,
-        "method",
+        sns.stripplot,
+        "Method",
         y,
-        "method",
+        "Method",
         order=order,
         hue_order=order,
-        palette="pastel",
-        alpha=0.6,
+        palette=colors,
         size=3,
         linewidth=1,
     )
+
+    g.set(xlabel=None)
     return g
 
 
 def main():
     ap = argparse.ArgumentParser()
-    # /project/logsdon_shared/projects/Keith/NucFlagPaper/benchmarks/misasim/nucflag
     ap.add_argument("-n", "--nucflag_bmks_dir", default="benchmarks/misasim/nucflag")
-    # /project/logsdon_shared/projects/Keith/NucFlagPaper/benchmarks/misasim/inspector
     ap.add_argument(
         "-i", "--inspector_bmks_dir", default="benchmarks/misasim/inspector"
     )
-    # /project/logsdon_shared/projects/Keith/NucFlagPaper/benchmarks/misasim/flagger
     ap.add_argument("-f", "--flagger_bmks_dir", default="benchmarks/misasim/flagger")
-    ap.add_argument("-o", "--output_dir", default="results/benchmarks")
+    ap.add_argument("-o", "--output_dir", default="results/misasim/benchmarks")
     args = ap.parse_args()
 
     df = (
         pl.concat(
             [
                 read_files(os.path.join(args.flagger_bmks_dir, "*.txt")).with_columns(
-                    method=pl.lit("flagger"),
+                    method=pl.lit("HMM-Flagger v1.1.0"),
                     step=pl.lit("run_flagger"),
                 ),
                 read_files(os.path.join(args.inspector_bmks_dir, "*.txt")).with_columns(
-                    method=pl.lit("inspector")
+                    method=pl.lit("Inspector v1.3")
                 ),
                 read_files(
                     os.path.join(args.nucflag_bmks_dir, "run_nucflag*.tsv")
-                ).with_columns(method=pl.lit("nucflag")),
+                ).with_columns(method=pl.lit("NucFlag v1.0\n(CRAM)")),
             ]
         )
         .sort("method", "dtype", "mtype")
+        .rename(
+            {
+                "dtype": "Data",
+                "mtype": "Misassembly",
+                "method": "Method",
+                "max_rss": "Maximum RSS (MB)",
+                "minutes": "Wall Time (min)",
+            }
+        )
         .to_pandas()
     )
 
     os.makedirs(args.output_dir, exist_ok=True)
-    order = ["flagger", "inspector", "nucflag"]
-    g_rss = plot_agg(df, "max_rss", order)
-    g_rss.savefig(os.path.join(args.output_dir, "rss.png"))
-    g_time = plot_agg(df, "minutes", order)
-    g_time.savefig(os.path.join(args.output_dir, "minutes.png"))
+    g_rss = plot_agg(df, "Maximum RSS (MB)", TOOL_NAMES)
+    g_rss.savefig(os.path.join(args.output_dir, "rss.png"), dpi=600)
+    g_time = plot_agg(df, "Wall Time (min)", TOOL_NAMES)
+    g_time.savefig(os.path.join(args.output_dir, "minutes.png"), dpi=600)
 
 
 if __name__ == "__main__":

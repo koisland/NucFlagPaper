@@ -1,0 +1,145 @@
+include: "../common.smk"
+
+
+"""
+{
+    Literal["output_dir"]: str,
+    Literal["logs_dir"]: str,
+    Literal["benchmarks_dir"]: str,
+    Literal["reference"]: str,
+    Literal["samples"]: {
+        str: {
+            Literal["assembly"]: str,
+            Literal["hifi"]: str,
+            Literal["config"]: str,
+        }
+    }
+}
+"""
+
+OUTPUT_DIR = config["output_dir"]
+LOG_DIR = config["logs_dir"]
+BENCHMARK_DIR = config["benchmarks_dir"]
+DATA = config["samples"]
+REFERENCE = config.get("reference", "Col-PEK")
+SAMPLES_NO_REF = [sm for sm in DATA.keys() if sm != REFERENCE]
+
+
+rule download_data:
+    output:
+        data=join(OUTPUT_DIR, "data", "{dtype}", "{sm}.fx.gz"),
+        idx=join(OUTPUT_DIR, "data", "{dtype}", "{sm}.fx.gz.fai"),
+    params:
+        url=lambda wc: DATA[wc.sm][wc.dtype],
+    log:
+        join(LOG_DIR, "download_data_{dtype}_{sm}.log"),
+    conda:
+        "../../envs/tools.yaml"
+    shell:
+        """
+        for url in {params.url}; do
+            wget --no-verbose {params.url} -O - | zcat | bgzip >> {output.data} 2>> {log}
+        done
+        samtools faidx {output.data}
+        """
+
+
+nf_config = {
+    "samples": [
+        {
+            "name": f"{sm}_{dtype}",
+            "asm_fa": expand(rules.download_data.output.data, sm=sm, dtype="assembly")[
+                0
+            ],
+            "reads": expand(rules.download_data.output.data, sm=sm, dtype=dtype),
+            **(
+                {"config": DATA[sm]["config"]}
+                if dtype == "hifi"
+                else {"preset": "ont_r9"}
+            ),
+        }
+        for sm in DATA.keys()
+        for dtype in ("hifi", "ont")
+    ],
+    "output_dir": OUTPUT_DIR,
+    "output_plots": False,
+    "output_pileup": False,
+    "output_ideogram": True,
+    "logs_dir": LOG_DIR,
+    "benchmarks_dir": BENCHMARK_DIR,
+    "threads_aln": 12,
+    "mem_aln": "50G",
+    "processes_nucflag": 12,
+    "threads_nucflag": 12,
+    "mem_nucflag": "50G",
+    # Filter unmapped, non-primary, and supplementary alignments.
+    "samtools_view_flag": 2308,
+    # Don't use -y as fastq tags have invalid character.
+    # Similar to https://github.com/samtools/samtools/issues/2041
+    "aligner_opts": "-a --eqx --cs -x lr:hqae -I8g",
+    "output_format": "bam",
+}
+
+
+module NucFlagNonhuman:
+    snakefile:
+        "../Snakemake-NucFlag/workflow/Snakefile"
+    config:
+        nf_config
+
+
+use rule * from NucFlagNonhuman
+
+
+rule calculate_qv:
+    input:
+        calls=rules.check_asm_nucflag.output.misassemblies,
+    output:
+        qv=join(
+            OUTPUT_DIR,
+            "{sm}.qv.bed",
+        ),
+    conda:
+        "../Snakemake-NucFlag/workflow/env/nucflag.yaml"
+    shell:
+        """
+        nucflag qv -i {input.calls} -c scaffold > {output.qv}
+        """
+
+
+saffire_cfg = {
+    "ref": {
+        REFERENCE: expand(
+            rules.download_data.output.data, sm=REFERENCE, dtype="assembly"
+        )[0]
+    },
+    "sm": {
+        sm: expand(rules.download_data.output.data, sm=sm, dtype="assembly")[0]
+        for sm in SAMPLES_NO_REF
+    },
+    "temp_dir": join(OUTPUT_DIR, "saffire", "temp"),
+    "output_dir": join(OUTPUT_DIR, "saffire"),
+    "logs_dir": join(LOG_DIR, "saffire"),
+    "benchmarks_dir": join(BENCHMARK_DIR, "saffire"),
+    "aln_threads": 8,
+    "aln_mem": "20GB",
+    "mm2_opts": "-x asm5 --secondary=no -K 8G",
+}
+
+
+module align_asm_to_ref:
+    snakefile:
+        "../asm-to-reference-alignment/workflow/Snakefile"
+    config:
+        saffire_cfg
+
+
+use rule * from align_asm_to_ref as asm_ref_*
+
+
+rule all:
+    input:
+        expand(rules.download_data.output, dtype=["assembly", "hifi"], sm=DATA.keys()),
+        rules.nucflag.input,
+        expand(rules.calculate_qv.output, sm=[f"{sm}_hifi" for sm in DATA.keys()]),
+        expand(rules.asm_ref_SafFire.output.bed, ref=REFERENCE, sm=SAMPLES_NO_REF),

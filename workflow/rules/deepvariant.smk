@@ -72,6 +72,9 @@ rule filter_vcf_calls:
         """
         zcat -f {input.vcf} | grep -v "#" | awk -v OFS="\\t" '{{
             split($10, info, ":")
+            gq=info[2]
+            depth=info[3]
+            # If filter by homozygous variants, most will be removed.
             if ($7 == "PASS") {{
                 print $1, $2, $2 + length($4), $4"-"$5, gq, $3, $2, $2 + length($4), "0,0,0"
             }}
