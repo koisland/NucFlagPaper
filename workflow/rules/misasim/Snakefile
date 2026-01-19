@@ -159,12 +159,12 @@ module NucFlag:
 nf_config_by_sm = {sm_cfg["name"]: sm_cfg for sm_cfg in nf_config_base["samples"]}
 
 
-use rule * from NucFlag
+use rule * from NucFlag as ms_*
 
 
 rule create_tmp_bam:
     input:
-        bam=lambda wc: rules.aln_merge_read_asm_alignments.output.alignment.format(
+        bam=lambda wc: rules.ms_aln_merge_read_asm_alignments.output.alignment.format(
             sm=wc.sm_cond
         ),
         fa=lambda wc: nf_config_by_sm[wc.sm_cond]["asm_fa"],
@@ -332,7 +332,7 @@ use rule * from Inspector
 rule calculate_precision_recall:
     input:
         script="workflow/scripts/metrics/calculate_precision_recall.py",
-        chkpt=[rules.nucflag.input, rules.ms_all.input],
+        chkpt=[rules.ms_nucflag.input, rules.ms_all.input],
     output:
         summary=join(SUMMARY_OUTPUT_DIR, "nucflag_{sm}.tsv"),
         missed_calls_dir=directory(join(SUMMARY_OUTPUT_DIR, "nucflag_{sm}_missed")),
@@ -429,7 +429,7 @@ rule plot_precision_recall_xy:
 rule generate_benchmarks:
     input:
         [
-            rules.nucflag.input,
+            rules.ms_nucflag.input,
             rules.flagger.input,
             rules.inspector.input,
         ],
@@ -439,7 +439,7 @@ rule generate_benchmarks:
     params:
         benchmark_dir_args=" ".join(
             [
-                f"{f} benchmarks/{tool}"
+                f"{f} {join(BENCHMARK_DIR, tool)}"
                 for (f, tool) in [
                     ("-i", "inspector"),
                     ("-f", "flagger"),
@@ -457,7 +457,7 @@ rule generate_benchmarks:
 
 rule all:
     input:
-        rules.nucflag.input,
+        rules.ms_nucflag.input,
         rules.flagger.input,
         rules.inspector.input,
         expand(rules.calculate_precision_recall.output, sm=SAMPLES),

@@ -1,8 +1,3 @@
-ASM_COLORS = {
-    "CHM13_hifiasm_0.25.0": "red",
-    "CHM13_verkko_2.2.1": "gray",
-    "CHM13_verkko_2.3": "black",
-}
 
 
 rule draw_ng50:
@@ -21,6 +16,7 @@ rule draw_ng50:
             )
             for sm in config["samples"].keys()
         ],
+        ref=rules.download_chm13.output.fai,
     output:
         plot=join(OUTPUT_DIR, "ng50", "plot_ng50.png"),
     params:
@@ -31,5 +27,5 @@ rule draw_ng50:
         "../../envs/curated.yaml"
     shell:
         """
-        python {params.script} -i {input.asm} -l {params.labels} -c {params.colors} -o {output.plot}
+        python {params.script} -i {input.asm} <(grep -v chrY {input.ref}) -l {params.labels} CHM13v2.0 -c {params.colors} red -o {output.plot}
         """

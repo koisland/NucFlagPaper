@@ -1,8 +1,15 @@
-import sys
+import argparse
+
 import polars as pl
-import matplotlib.pyplot as plt
 import seaborn as sns
+import matplotlib.pyplot as plt
+import matplotlib.patheffects as pe
+
+from matplotlib.text import Text
+from matplotlib.axes import Axes
 from matplotlib.colors import rgb2hex
+from matplotlib.patches import Patch
+
 
 COLS = [
     "chrom",
@@ -49,7 +56,7 @@ DF_CENSAT_COLORS = pl.DataFrame(
             "dhor",
             "hsat1A",
             "hor",
-            "no_overlap",
+            "No Overlap",
         ],
     }
 )
@@ -62,12 +69,25 @@ DF_SEGDUP_COLORS = pl.DataFrame(
             r"90 - 98% similarity",
             r"98 - 99% similarity",
             r"Greater than 99% similarity",
-            "Other",
+            "No Overlap",
         ],
     }
 )
 SEGDUP_COLORS = dict(DF_SEGDUP_COLORS.select("oname", "item_rgb").iter_rows())
 CORRECT_CALLS = {"good", "correct", "Hap"}
+TOOL_COLORS = {
+    "NucFlag v1.0.0": "purple",
+    "Inspector v1.3": "teal",
+    "HMM-Flagger v1.1.0": "magenta",
+    "DeepVariant v1.9.0": "maroon",
+}
+LEGEND_KWARGS = dict(
+    handlelength=1.0,
+    handleheight=1.0,
+    borderaxespad=0,
+    fancybox=False,
+    frameon=False,
+)
 
 
 def rgb_to_hex(srs: pl.Series) -> pl.Series:
@@ -82,180 +102,243 @@ def rgb_to_hex(srs: pl.Series) -> pl.Series:
     return pl.Series(name="color", values=color_hex)
 
 
-def main():
-    chrom = sys.argv[1]
-    calls = sys.argv[2]
-    censat = sys.argv[3]
-    segdup = sys.argv[4]
-    output_prefix = sys.argv[5]
+# https://stackoverflow.com/a/67594395
+def update_bars(ax: Axes, round_to: int):
+    for c in ax.containers:
+        labels = [f"{round(v.get_height() / 1_000_000, round_to)}" for v in c]
+        ax.bar_label(c, labels=labels, label_type="edge")
 
-    df_censat = (
-        pl.read_csv(
-            censat,
-            separator="\t",
-            new_columns=COLS,
-            has_header=False,
+    ylim = ax.get_ylim()
+    yticks = range(int(ylim[0]), int(ylim[1]), 10_000_000)
+    ax.set_yticks(yticks, [f"{round(tick / 1_000_000, round_to)}" for tick in yticks])
+    ax.set_xlabel(None)
+
+
+def update_deepvariant_label(df: pl.DataFrame) -> pl.DataFrame:
+    return df.with_columns(pl.col("name").str.split("-")).with_columns(
+        name=pl.when(
+            pl.col("name").list[0].str.len_chars()
+            < pl.col("name").list[1].str.len_chars()
         )
-        .filter(~pl.col("name").is_in(CORRECT_CALLS))
-        .unique(subset=["chrom", "st", "end", "name", "oname", "oitem_rgb"])
-        .with_columns(
-            item_rgb=pl.col("oitem_rgb").map_batches(
-                rgb_to_hex, return_dtype=pl.String
-            ),
+        .then(pl.lit("insertion"))
+        .when(
+            pl.col("name").list[0].str.len_chars()
+            > pl.col("name").list[1].str.len_chars()
         )
-    )
-    df_segdup = (
-        pl.read_csv(
-            segdup,
-            separator="\t",
-            new_columns=COLS,
-            has_header=False,
-        )
-        .with_columns(
-            oname=pl.when(pl.col("oname") == "no_overlap")
-            .then(pl.lit(0.0))
-            .otherwise(pl.col("oname"))
-            .cast(pl.Float64)
-        )
-        .filter(~pl.col("name").is_in(CORRECT_CALLS))
-        .with_columns(
-            oname=pl.when(pl.col("oname") == 0.0)
-            .then(pl.lit("Other"))
-            .when(pl.col("oname") < 0.9)
-            .then(pl.lit(r"Less than 90% similarity"))
-            .when(pl.col("oname").is_between(0.9, 0.98))
-            .then(pl.lit(r"90 - 98% similarity"))
-            .when(pl.col("oname").is_between(0.98, 0.99))
-            .then(pl.lit(r"98 - 99% similarity"))
-            .otherwise(pl.lit(r"Greater than 99% similarity")),
-        )
-        .unique(subset=["chrom", "st", "end", "name", "oname", "oitem_rgb"])
-        .join(DF_SEGDUP_COLORS, on="oname")
-    )
-    kwargs = dict(
-        separator="\t",
-        new_columns=COLS[0:4],
-        has_header=False,
-    )
-    try:
-        df_misassemblies = pl.read_csv(
-            calls, comment_prefix="#", **kwargs, columns=range(0, 4)
-        ).filter(~pl.col("name").is_in(CORRECT_CALLS))
-    except (pl.exceptions.ShapeError, pl.exceptions.OutOfBoundsError):
-        # flagger
-        df_misassemblies = pl.read_csv(
-            calls, comment_prefix="track", **kwargs, columns=range(0, 4)
-        ).filter(~pl.col("name").is_in(CORRECT_CALLS))
-
-    if chrom != "all":
-        df_censat = df_censat.filter(pl.col("chrom") == chrom)
-        df_segdup = df_segdup.filter(pl.col("chrom") == chrom)
-        df_misassemblies = df_misassemblies.filter(pl.col("chrom") == chrom)
-
-    df_censat_total = (
-        df_censat.drop("oname")
-        .join(DF_CENSAT_COLORS, on="item_rgb")
-        .group_by(["oname", "name"])
-        .agg(
-            length=(pl.col("end") - pl.col("st")).sum(),
-            item_rgb=pl.col("item_rgb").first(),
-        )
-        .sort(by="length")
-        .pivot(index="oname", on="name", values="length")
-        .fill_null(0)
-        .to_pandas()
-        .set_index("oname")
-    )
-    df_censat_total = df_censat_total.reindex(index=DF_CENSAT_COLORS["oname"]).fillna(0)
-
-    df_segdup_total = (
-        df_segdup.group_by(["oname", "name"])
-        .agg(
-            length=(pl.col("end") - pl.col("st")).sum(),
-            item_rgb=pl.col("item_rgb").first(),
-        )
-        .sort(by="length")
-        .pivot(index="oname", on="name", values="length")
-        .fill_null(0)
-        .to_pandas()
-        .set_index("oname")
-    )
-    df_segdup_total = df_segdup_total.reindex(index=DF_SEGDUP_COLORS["oname"]).fillna(0)
-
-    fig_censat, ax_censat = plt.subplots(figsize=(16, 8))
-    sns.heatmap(
-        df_censat_total,
-        ax=ax_censat,
-        annot=True,
-        linewidth=0.5,
-        fmt=",.0f",
-        cmap="mako",
-    )
-    for lbl in ax_censat.get_yticklabels():
-        lbl.set_rotation(0)
-        lbl.set_color(CENSAT_COLORS[lbl.get_text()])
-
-    ax_censat.set_xticklabels(
-        ax_censat.get_xticklabels(), rotation=45, ha="right", rotation_mode="anchor"
+        .then(pl.lit("deletion"))
+        .when(pl.col("name").list[0] != pl.col("name").list[1])
+        .then(pl.lit("snv"))
+        .otherwise(pl.lit("other"))
     )
 
-    ax_censat.set_ylabel("Sequence type")
-    ax_censat.set_xlabel("Misassembly")
 
-    fig_segdup, ax_segdup = plt.subplots(figsize=(16, 8))
-    sns.heatmap(
-        df_segdup_total,
-        ax=ax_segdup,
-        annot=True,
-        linewidth=0.5,
-        fmt=",.0f",
-        cmap="mako",
-    )
-    for lbl in ax_segdup.get_yticklabels():
-        lbl.set_rotation(0)
-        lbl.set_color(SEGDUP_COLORS[lbl.get_text()])
-
-    ax_segdup.set_xticklabels(
-        ax_segdup.get_xticklabels(), rotation=45, ha="right", rotation_mode="anchor"
-    )
-
-    ax_segdup.set_ylabel("Segmental duplication similarity")
-    ax_segdup.set_xlabel("Misassembly")
-
-    fig, ax = plt.subplots(figsize=(4, 4))
-    df_misassemblies_total = (
-        df_misassemblies.group_by(["name"])
-        .agg(length=(pl.col("end") - pl.col("st")).sum())
-        .sort(by="length")
-    )
-
-    plot_bar = sns.barplot(
-        df_misassemblies_total,
+def draw_bar_all(df_all: pl.DataFrame, outfile: str):
+    g = sns.catplot(
+        data=df_all,
         x="name",
         y="length",
-        ax=ax,
+        col="lbl",
+        hue="lbl",
+        sharex=False,
+        kind="bar",
+        legend=None,
+        aspect=1.5,
+        palette=TOOL_COLORS,
     )
-    for container in plot_bar.containers:
-        ax.bar_label(container, fmt=lambda v: f"{v:,.0f}")
+    for ax in g.axes.ravel():
+        update_bars(ax, round_to=2)
 
-    for spine in ["top", "right"]:
-        ax.spines[spine].set_visible(False)
+    g.set_titles(row_template="{row_name}", col_template="{col_name}")
 
-    ax.set_ylabel("Length (bp)")
-    ax.set_xlabel(None)
-    ax.set_xticklabels(
-        ax.get_xticklabels(), rotation=45, ha="right", rotation_mode="anchor"
+    g.tick_params(axis="x", rotation=45)
+    g.set_ylabels("Length (Mbp)")
+    g.savefig(outfile, dpi=600, bbox_inches="tight")
+
+
+def draw_bar_annot(df_annot: pl.DataFrame, outfile: str):
+    fig, axes = plt.subplots(
+        nrows=2,
+        ncols=1,
+        layout="constrained",
+        figsize=(20, 5),
+        sharex=False,
     )
 
-    df_misassemblies_total.write_csv(
-        f"{output_prefix}_total_{chrom}.tsv", separator="\t"
-    )
-    df_segdup_total.to_csv(f"{output_prefix}_segdup_{chrom}.tsv", sep="\t", index=True)
-    df_censat_total.to_csv(f"{output_prefix}_censat_{chrom}.tsv", sep="\t", index=True)
+    for ax, typ, colors in (
+        (axes[0], "Centromere Satellites (cenSat)", CENSAT_COLORS),
+        (axes[1], "Segmental Duplications", SEGDUP_COLORS),
+    ):
+        ax: Axes
+        sns.barplot(
+            df_annot.filter(pl.col("typ") == typ),
+            x="oname",
+            y="length",
+            hue="lbl",
+            order=colors.keys(),
+            palette=TOOL_COLORS,
+            legend=None,
+            ax=ax,
+        )
+        for lbl in ax.get_xticklabels():
+            lbl: Text
+            # Color and stroke around text
+            lbl.set_color(colors[lbl.get_text()])
+            lbl.set_path_effects([pe.Stroke(linewidth=0.2, foreground="black")])
 
-    fig.savefig(f"{output_prefix}_total_{chrom}.png", bbox_inches="tight")
-    fig_segdup.savefig(f"{output_prefix}_segdup_{chrom}.png", bbox_inches="tight")
-    fig_censat.savefig(f"{output_prefix}_censat_{chrom}.png", bbox_inches="tight")
+        for spine in ("top", "right"):
+            ax.spines[spine].set_visible(False)
+
+        ax.set_ylabel("Length (Mbp)")
+        update_bars(ax, round_to=1)
+
+    fig.legend(
+        labels=TOOL_COLORS.keys(),
+        handles=[Patch(color=color) for color in TOOL_COLORS.values()],
+        loc="center left",
+        bbox_to_anchor=(1.0, 0.5),
+        title=None,
+        **LEGEND_KWARGS,
+    )
+    fig.savefig(outfile, dpi=600, bbox_inches="tight")
+
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("-i", "--input_calls", nargs="+", help="Input calls")
+    ap.add_argument("-l", "--labels", nargs="+", help="Labels")
+    ap.add_argument("-c", "--chrom", required=True, help="Chromosome.")
+    ap.add_argument(
+        "-s",
+        "--input_censat",
+        nargs="+",
+        help="Input calls intersected with censat annotations.",
+    )
+    ap.add_argument(
+        "-d",
+        "--input_segdup",
+        nargs="+",
+        help="Input calls intersected with segdup annotations.",
+    )
+    ap.add_argument("-o", "--output_prefix", help="Output prefix.")
+    args = ap.parse_args()
+    chrom = args.chrom
+
+    dfs_all_annot: list[pl.DataFrame] = []
+    dfs_all: list[pl.DataFrame] = []
+    for lbl, call, censat, segdup in zip(
+        args.labels, args.input_calls, args.input_censat, args.input_segdup, strict=True
+    ):
+        df_censat = (
+            pl.read_csv(
+                censat,
+                separator="\t",
+                new_columns=COLS,
+                has_header=False,
+            )
+            .filter(~pl.col("name").is_in(CORRECT_CALLS))
+            .unique(subset=["chrom", "st", "end", "name", "oname", "oitem_rgb"])
+            .with_columns(
+                oname=pl.when(pl.col("oname") == "no_overlap")
+                .then(pl.lit("No Overlap"))
+                .otherwise(pl.col("oname")),
+                item_rgb=pl.col("oitem_rgb").map_batches(
+                    rgb_to_hex, return_dtype=pl.String
+                ),
+            )
+        )
+
+        df_segdup = (
+            pl.read_csv(
+                segdup,
+                separator="\t",
+                new_columns=COLS,
+                has_header=False,
+            )
+            # Oname is percent ident
+            .with_columns(
+                oname=pl.when(pl.col("oname") == "no_overlap")
+                .then(pl.lit(0.0))
+                .otherwise(pl.col("oname"))
+                .cast(pl.Float64)
+            )
+            .filter(~pl.col("name").is_in(CORRECT_CALLS))
+            .with_columns(
+                oname=pl.when(pl.col("oname") == 0.0)
+                .then(pl.lit("No Overlap"))
+                .when(pl.col("oname") < 0.9)
+                .then(pl.lit(r"Less than 90% similarity"))
+                .when(pl.col("oname").is_between(0.9, 0.98))
+                .then(pl.lit(r"90 - 98% similarity"))
+                .when(pl.col("oname").is_between(0.98, 0.99))
+                .then(pl.lit(r"98 - 99% similarity"))
+                .otherwise(pl.lit(r"Greater than 99% similarity")),
+            )
+            # Just take any if multiple. Probably not the best solution.
+            .unique(subset=["chrom", "st", "end", "name", "oname"])
+            .join(DF_SEGDUP_COLORS, on="oname")
+        )
+        kwargs = dict(
+            separator="\t",
+            new_columns=COLS[0:4],
+            has_header=False,
+        )
+        try:
+            df_misassemblies = pl.read_csv(
+                call, comment_prefix="#", **kwargs, columns=range(0, 4)
+            ).filter(~pl.col("name").is_in(CORRECT_CALLS))
+        except (pl.exceptions.ShapeError, pl.exceptions.OutOfBoundsError):
+            # flagger
+            df_misassemblies = pl.read_csv(
+                call, comment_prefix="track", **kwargs, columns=range(0, 4)
+            ).filter(~pl.col("name").is_in(CORRECT_CALLS))
+
+        if lbl == "DeepVariant v1.9.0":
+            df_censat = update_deepvariant_label(df_censat)
+            df_segdup = update_deepvariant_label(df_segdup)
+            df_misassemblies = update_deepvariant_label(df_misassemblies)
+
+        if chrom != "all":
+            df_censat = df_censat.filter(pl.col("chrom") == chrom)
+            df_segdup = df_segdup.filter(pl.col("chrom") == chrom)
+            df_misassemblies = df_misassemblies.filter(pl.col("chrom") == chrom)
+
+        df_censat_total = (
+            df_censat.drop("oname")
+            .join(DF_CENSAT_COLORS, on="item_rgb")
+            .group_by(["oname"])
+            .agg(
+                length=(pl.col("end") - pl.col("st")).sum(),
+                item_rgb=pl.col("item_rgb").first(),
+            )
+            .sort(by=["oname", "length"])
+            .with_columns(typ=pl.lit("Centromere Satellites (cenSat)"), lbl=pl.lit(lbl))
+        )
+
+        df_segdup_total = (
+            df_segdup.group_by(["oname"])
+            .agg(
+                length=(pl.col("end") - pl.col("st")).sum(),
+                item_rgb=pl.col("item_rgb").first(),
+            )
+            .sort(by=["oname", "length"])
+            .with_columns(typ=pl.lit("Segmental Duplications"), lbl=pl.lit(lbl))
+        )
+        df_annot = pl.concat([df_segdup_total, df_censat_total])
+        dfs_all_annot.append(df_annot)
+
+        df_misassemblies_total = (
+            df_misassemblies.group_by(["name"])
+            .agg(length=(pl.col("end") - pl.col("st")).sum())
+            .sort(by=["name", "length"])
+            .with_columns(lbl=pl.lit(lbl))
+        )
+        dfs_all.append(df_misassemblies_total)
+
+    df_all = pl.concat(dfs_all)
+    draw_bar_all(df_all, f"{args.output_prefix}.png")
+
+    df_all_annot = pl.concat(dfs_all_annot)
+    draw_bar_annot(df_all_annot, f"{args.output_prefix}_ctx.png")
 
 
 if __name__ == "__main__":

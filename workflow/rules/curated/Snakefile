@@ -31,7 +31,13 @@ ELEMENT = {
     "R1": "s3://human-pangenomics/T2T/scratch/HG002/sequencing/element/trio/HG002/ins1000/ASHG-C063_R1.fastq.gz",
     "R2": "s3://human-pangenomics/T2T/scratch/HG002/sequencing/element/trio/HG002/ins1000/ASHG-C063_R2.fastq.gz",
 }
-CHROMS = ["chrY_PATERNAL", "chr21_PATERNAL", "chr4_PATERNAL"]
+CHROMS = ["chrY_PATERNAL", "chr21_PATERNAL", "chr4_PATERNAL", "all"]
+TOOLS = {
+    "flagger": "HMM-Flagger v1.1.0",
+    "inspector": "Inspector v1.3",
+    "nucflag": "NucFlag v1.0.0",
+    "deepvariant": "DeepVariant v1.9.0",
+}
 
 
 wildcard_constraints:
@@ -291,7 +297,7 @@ rule all:
         expand(
             rules.calculate_precision_recall.output,
             version=ASSEMBLIES.keys(),
-            tool=["flagger", "inspector", "nucflag", "deepvariant"],
+            tool=TOOLS.keys(),
         ),
         rules.generate_ideogram.input,
         rules.validate_homopolymers_all.input,

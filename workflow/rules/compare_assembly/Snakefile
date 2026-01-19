@@ -6,6 +6,26 @@ OUTPUT_DIR = config["output_dir"]
 LOG_DIR = config["log_dir"]
 BENCHMARK_DIR = config["benchmark_dir"]
 NUCFLAG_CONFIG = config["nucflag_config"]
+ASM_COLORS = {
+    "CHM13_hifiasm_0.25.0": "orange",
+    "CHM13_verkko_2.2.1": "blue",
+    "CHM13_verkko_2.3": "teal",
+}
+
+
+rule download_chm13:
+    output:
+        fa=join(OUTPUT_DIR, "reference", "chm13v2.0.fa.gz"),
+        fai=join(OUTPUT_DIR, "reference", "chm13v2.0.fa.gz.fai"),
+    params:
+        url="https://s3-us-west-2.amazonaws.com/human-pangenomics/T2T/CHM13/assemblies/analysis_set/chm13v2.0.fa.gz",
+    conda:
+        "../../envs/curated.yaml"
+    shell:
+        """
+        wget {params.url} -O {output.fa}
+        samtools faidx {output.fa}
+        """
 
 
 module DenovoAssembly:
@@ -22,10 +42,6 @@ def get_reads_from_glob(data_src: dict) -> list[str]:
     data_dir = data_src["path"]
     glob_include = data_src["include"][0]
     return glob.glob(join(data_dir, glob_include))
-
-
-# TODO: Liftover cytobands (https://s3-us-west-2.amazonaws.com/human-pangenomics/T2T/CHM13/assemblies/annotation/chm13v2.0_cytobands_allchrs.bed)
-# TODO: Liftover censat (https://s3-us-west-2.amazonaws.com/human-pangenomics/T2T/CHM13/assemblies/annotation/chm13v2.0_censat_v2.1.bed)
 
 
 # Then run NucFlag on each assembly
@@ -79,7 +95,9 @@ use rule * from NucFlagDenovoAsm as nf_denovo_*
 
 include: "asm_variant_graph.smk"
 include: "compare_homopolymers.smk"
+include: "liftover.smk"
 include: "draw_ng50.smk"
+include: "compare_all.smk"
 
 
 rule all:
@@ -89,3 +107,4 @@ rule all:
         rules.cmp_homopolymers_all.input,
         rules.nf_denovo_nucflag.input,
         rules.draw_ng50.output,
+        rules.liftover_all.input,

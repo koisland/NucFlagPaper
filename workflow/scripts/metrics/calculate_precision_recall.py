@@ -20,7 +20,16 @@ BED_TRUTH_COLS = (
     "tend",
     "item_rgb",
 )
-GOOD_MTYPES = {"correct", "good", "Hap"}
+GOOD_MTYPES = {
+    "correct",
+    "good",
+    "Hap",
+    "het_mismap",
+    "scaffold",
+    "homopolymer",
+    "simple_repeat",
+    "dinucleotide",
+}
 
 RGX_DOWNSAMPLE = r"(?<downsample>0\.33|0\.5)"
 RGX_SM_DTYPE = r"(?<sample>[^/]*?)_(?<dtype>hifi|ont_r10|ont_r9)"
@@ -83,6 +92,8 @@ def calculate_precision_recall(
                 bp_adj = -bp_adj
             elif mtype == "false_duplication":
                 bp_adj = bp_adj
+            elif mtype == "inversion":
+                bp_adj = 0
         new_st = max(0, row["st"] + bp_adj)
         new_end = row["end"] + bp_adj
         itree_ctrl_misassemblies_misasim_coords[row["chrom"]].addi(
@@ -306,7 +317,8 @@ def main():
     print("\t".join(header))
 
     output_dir_missed_calls = args.output_dir_missed_calls
-    os.makedirs(output_dir_missed_calls, exist_ok=True)
+    if output_dir_missed_calls:
+        os.makedirs(output_dir_missed_calls, exist_ok=True)
 
     all_groups = df_res["sample", "downsample", "dtype"].unique()
     for group in all_groups.iter_rows():

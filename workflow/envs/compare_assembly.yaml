@@ -5,3 +5,5 @@ dependencies:
   - seqkit
   - bedtools
   - samtools
+  - paf2chain
+  - ucsc-liftover

@@ -1,3 +1,5 @@
+from snakemake.io import Wildcards
+
 
 rule overlap_annotation_data:
     input:
@@ -18,29 +20,37 @@ rule overlap_annotation_data:
 
 rule plot_seq_context:
     input:
-        calls=get_bed_files,
-        censat=rules.overlap_annotation_data.output.censat,
-        segdup=rules.overlap_annotation_data.output.segdup,
+        calls=[
+            get_bed_files(Wildcards(fromdict=dict(tool=tool, version="v1.0.1")))
+            for tool in TOOLS.keys()
+        ],
+        censat=expand(
+            rules.overlap_annotation_data.output.censat,
+            tool=TOOLS.keys(),
+            version="v1.0.1",
+        ),
+        segdup=expand(
+            rules.overlap_annotation_data.output.segdup,
+            tool=TOOLS.keys(),
+            version="v1.0.1",
+        ),
     output:
-        all_plot=join(OUTPUT_DIR, "sequence_ctx", "{tool}_{version}_total_{chrom}.png"),
-        censat_plot=join(
-            OUTPUT_DIR, "sequence_ctx", "{tool}_{version}_censat_{chrom}.png"
-        ),
-        segdup_plot=join(
-            OUTPUT_DIR, "sequence_ctx", "{tool}_{version}_segdup_{chrom}.png"
-        ),
+        all_plot=join(OUTPUT_DIR, "sequence_ctx", "{chrom}.png"),
+        ctx_plot=join(OUTPUT_DIR, "sequence_ctx", "{chrom}_ctx.png"),
     params:
         script="workflow/scripts/curated/plot_seq_context.py",
         chrom="{chrom}",
-        output_prefix=lambda wc, output: join(
-            dirname(output[0]), f"{wc.tool}_{wc.version}"
-        ),
+        labels=" ".join(f"'{tool}'" for tool in TOOLS.values()),
+        output_prefix=lambda wc, output: join(dirname(output[0]), wc.chrom),
     shell:
         """
         python {params.script} \
-        {params.chrom} \
-        {input.calls} {input.censat} {input.segdup} \
-        {params.output_prefix}
+        -c {params.chrom} \
+        -i {input.calls} \
+        -l {params.labels} \
+        -s {input.censat} \
+        -d {input.segdup} \
+        -o {params.output_prefix}
         """
 
 
@@ -48,7 +58,5 @@ rule sequence_context_all:
     input:
         expand(
             rules.plot_seq_context.output,
-            version=["v1.0.1"],
-            tool=["flagger", "inspector", "nucflag", "deepvariant"],
             chrom=CHROMS,
         ),

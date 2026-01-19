@@ -182,7 +182,7 @@ rule generate_ideogram:
         expand(rules.plot_ideogram.output, cond=["fp", "none"]),
         expand(
             rules.plot_ideogram_chrom.output,
-            chrom=CHROMS,
+            chrom=[chrom for chrom in CHROMS if chrom != "all"],
             cond=["fp", "none"],
         ),
     default_target: True

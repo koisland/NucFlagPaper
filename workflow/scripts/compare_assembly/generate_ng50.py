@@ -1,4 +1,5 @@
 import argparse
+import sys
 import polars as pl
 import matplotlib.pyplot as plt
 import matplotlib.patheffects as pe
@@ -63,15 +64,18 @@ def main():
             # ---+
             x_pts_1 = [x, cov_1]
             y_pts_1 = [length_1, length_1]
-            ax.plot(x_pts_1, y_pts_1, label=label, linestyle="dotted", color=color)
+            ax.plot(x_pts_1, y_pts_1, label=label, color=color)
             # ---+
             #    |
             x_pts_2 = [cov_1, cov_1]
             y_pts_2 = [length_1, length_2]
-            ax.plot(x_pts_2, y_pts_2, label=label, linestyle="dotted", color=color)
+            ax.plot(x_pts_2, y_pts_2, label=label, color=color)
             x = cov_1
             max_y = max(length_1, max_y)
 
+        # https://lh3.github.io/2020/04/08/a-new-metric-on-assembly-contiguity
+        aun = (df["contig_length"] ** 2).sum() / df["contig_length"].sum()
+        print(f"{label} auN: {aun}", file=sys.stderr)
         # Draw ng50 label
         idx = bisect(df["coverage"], 50.0)
         _, y_ng50, x_ng50_cov = df.row(idx)
@@ -81,6 +85,8 @@ def main():
             color=color,
             path_effects=[pe.withStroke(linewidth=4.0, foreground="white")],
         )
+        # ax.axhline(y=y_ng50, linestyle="dotted", color=color)
+        # ax.axhline(y=aun, linestyle="dashed", color=color)
 
     ax.set_xlim(0.0, 100.0)
     ax.set_ylim(0.0, max_y + 5.0)

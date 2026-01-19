@@ -71,6 +71,8 @@ def calculate_precision_recall(
                 bp_adj = -bp_adj
             elif mtype == "false_duplication":
                 bp_adj = bp_adj
+            elif mtype == "inversion":
+                bp_adj = 0
         new_st = max(0, row["st"] + bp_adj)
         new_end = row["end"] + bp_adj
         itree_ctrl_misassemblies_misasim_coords[row["chrom"]].addi(
