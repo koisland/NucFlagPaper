@@ -234,7 +234,6 @@ def get_bed_files(wc):
 
 rule calculate_precision_recall:
     input:
-        script="workflow/scripts/metrics/calculate_precision_recall_curated.py",
         test_bed=get_bed_files,
         truth_bed=rules.convert_vcf_to_bed.output,
     output:
@@ -242,11 +241,13 @@ rule calculate_precision_recall:
         missed_calls_dir=directory(
             join(OUTPUT_DIR, "summary", "{tool}_{version}_missed")
         ),
+    params:
+        script="workflow/scripts/metrics/calculate_precision_recall_curated.py",
     conda:
         "../../envs/tools.yaml"
     shell:
         """
-        python {input.script} \
+        python {params.script} \
         -a {input.test_bed} \
         -b {input.truth_bed} \
         --output_dir_missed_calls {output.missed_calls_dir} > {output.summary}

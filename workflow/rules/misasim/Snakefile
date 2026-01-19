@@ -331,12 +331,12 @@ use rule * from Inspector
 
 rule calculate_precision_recall:
     input:
-        script="workflow/scripts/metrics/calculate_precision_recall.py",
         chkpt=[rules.ms_nucflag.input, rules.ms_all.input],
     output:
         summary=join(SUMMARY_OUTPUT_DIR, "nucflag_{sm}.tsv"),
         missed_calls_dir=directory(join(SUMMARY_OUTPUT_DIR, "nucflag_{sm}_missed")),
     params:
+        script="workflow/scripts/metrics/calculate_precision_recall.py",
         fglob_test=lambda wc: f"{wc.sm}*_misassemblies.bed",
         fglob_truth=lambda wc: f"{wc.sm}/*.bed",
         dtype=get_dtype,
@@ -346,7 +346,7 @@ rule calculate_precision_recall:
         "../../envs/tools.yaml"
     shell:
         """
-        python {input.script} \
+        python {params.script} \
         -a {params.output_dir} \
         --glob_test "{params.fglob_test}" \
         -b {params.sim_output_dir} \
@@ -358,12 +358,12 @@ rule calculate_precision_recall:
 
 use rule calculate_precision_recall as calculate_precision_recall_inspector with:
     input:
-        script="workflow/scripts/metrics/calculate_precision_recall.py",
         chkpt=[rules.inspector.input, rules.ms_all.input],
     output:
         summary=join(SUMMARY_OUTPUT_DIR, "inspector_{sm}.tsv"),
         missed_calls_dir=directory(join(SUMMARY_OUTPUT_DIR, "inspector_{sm}_missed")),
     params:
+        script="workflow/scripts/metrics/calculate_precision_recall.py",
         fglob_test=lambda wc: f"{wc.sm}*.bed",
         fglob_truth=lambda wc: f"{wc.sm}/*.bed",
         dtype=get_dtype,
@@ -373,12 +373,12 @@ use rule calculate_precision_recall as calculate_precision_recall_inspector with
 
 use rule calculate_precision_recall as calculate_precision_recall_flagger with:
     input:
-        script="workflow/scripts/metrics/calculate_precision_recall.py",
         chkpt=rules.flagger.input,
     output:
         summary=join(SUMMARY_OUTPUT_DIR, "flagger_{sm}.tsv"),
         missed_calls_dir=directory(join(SUMMARY_OUTPUT_DIR, "flagger_{sm}_missed")),
     params:
+        script="workflow/scripts/metrics/calculate_precision_recall.py",
         fglob_test=lambda wc: f"{wc.sm}*/*.bed",
         fglob_truth=lambda wc: f"{wc.sm}/*.bed",
         dtype=get_dtype,
@@ -388,7 +388,6 @@ use rule calculate_precision_recall as calculate_precision_recall_flagger with:
 
 rule plot_precision_recall:
     input:
-        script="workflow/scripts/metrics/plot_precision_recall.py",
         summaries=[
             rules.calculate_precision_recall.output.summary,
             rules.calculate_precision_recall_inspector.output.summary,
@@ -397,18 +396,18 @@ rule plot_precision_recall:
     output:
         directory(join(SUMMARY_OUTPUT_DIR, "{sm}")),
     params:
+        script="workflow/scripts/metrics/plot_precision_recall.py",
         output_prefix=lambda wc, output: f"{output[0]}",
     conda:
         "../../envs/tools.yaml"
     shell:
         """
-        python {input.script} -i {input.summaries} -o {params.output_prefix}/
+        python {params.script} -i {input.summaries} -o {params.output_prefix}/
         """
 
 
 rule plot_precision_recall_xy:
     input:
-        script="workflow/scripts/metrics/plot_precision_recall_xy.py",
         summaries=[
             rules.calculate_precision_recall.output.summary,
             rules.calculate_precision_recall_inspector.output.summary,
@@ -417,12 +416,13 @@ rule plot_precision_recall_xy:
     output:
         directory(join(SUMMARY_OUTPUT_DIR, "{sm}_xy")),
     params:
+        script="workflow/scripts/metrics/plot_precision_recall_xy.py",
         output_prefix=lambda wc, output: f"{output[0]}",
     conda:
         "../../envs/tools.yaml"
     shell:
         """
-        python {input.script} -i {input.summaries} -o {params.output_prefix}/
+        python {params.script} -i {input.summaries} -o {params.output_prefix}/
         """
 
 

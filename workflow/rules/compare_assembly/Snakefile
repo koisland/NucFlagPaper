@@ -108,3 +108,4 @@ rule all:
         rules.nf_denovo_nucflag.input,
         rules.draw_ng50.output,
         rules.liftover_all.input,
+        rules.compare_all.input,

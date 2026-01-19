@@ -144,7 +144,6 @@ def nf_output(wc) -> str:
 
 rule calculate_precision_recall:
     input:
-        script="workflow/scripts/metrics/calculate_precision_recall.py",
         mtype_dir=lambda wc: dirname(MISASIM_OUTPUT.bed).format(sm=wc.sm),
         chkpt=lambda wc: [
             *expand(MISASIM_OUTPUT, sm=SAMPLES.keys(), seed=ALL_MTYPES_SEEDED.keys()),
@@ -156,6 +155,7 @@ rule calculate_precision_recall:
             join(OUTPUT_DIR, "summary", "nucflag_{sm}_{aligner}_missed")
         ),
     params:
+        script="workflow/scripts/metrics/calculate_precision_recall.py",
         fglob_test="{aligner}/*_misassemblies.bed",
         fglob_truth="*.bed",
         dtype=get_dtype,
@@ -164,7 +164,7 @@ rule calculate_precision_recall:
         "../../envs/tools.yaml"
     shell:
         """
-        python {input.script} \
+        python {params.script} \
         -a {params.output_dir} \
         --glob_test "{params.fglob_test}" \
         -b {input.mtype_dir} \
