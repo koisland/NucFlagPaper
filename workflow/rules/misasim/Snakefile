@@ -37,9 +37,19 @@ MISASIM_LOG_DIR = join(LOG_DIR, "simulated")
 BENCHMARK_DIR = config["benchmarks_dir"]
 NUCFLAG_BENCHMARK_DIR = join(BENCHMARK_DIR, "nucflag")
 
-
 DOWNSAMPLE_PERC = config.get("downsample_perc", [0.50, 0.33])
 ALL_MTYPES_SEEDED = config["seeded_mtypes"]
+
+TOOLS = {
+    "nucflag": "NucFlag v1.0.0",
+    "flagger": "HMM-Flagger v1.1.0",
+    "inspector": "Inspector v1.3",
+}
+TOOL_COLORS = {
+    "nucflag": "purple",
+    "flagger": "magenta",
+    "inspector": "teal",
+}
 
 
 wildcard_constraints:
@@ -329,130 +339,7 @@ module Inspector:
 use rule * from Inspector
 
 
-rule calculate_precision_recall:
-    input:
-        chkpt=[rules.ms_nucflag.input, rules.ms_all.input],
-    output:
-        summary=join(SUMMARY_OUTPUT_DIR, "nucflag_{sm}.tsv"),
-        missed_calls_dir=directory(join(SUMMARY_OUTPUT_DIR, "nucflag_{sm}_missed")),
-    params:
-        script="workflow/scripts/metrics/calculate_precision_recall.py",
-        fglob_test=lambda wc: f"{wc.sm}*_misassemblies.bed",
-        fglob_truth=lambda wc: f"{wc.sm}/*.bed",
-        dtype=get_dtype,
-        output_dir=NUCFLAG_OUTPUT_DIR,
-        sim_output_dir=MISASIM_OUTPUT_DIR,
-    conda:
-        "../../envs/tools.yaml"
-    shell:
-        """
-        python {params.script} \
-        -a {params.output_dir} \
-        --glob_test "{params.fglob_test}" \
-        -b {params.sim_output_dir} \
-        --glob_truth "{params.fglob_truth}" \
-        -d {params.dtype} \
-        --output_dir_missed_calls {output.missed_calls_dir} > {output.summary}
-        """
-
-
-use rule calculate_precision_recall as calculate_precision_recall_inspector with:
-    input:
-        chkpt=[rules.inspector.input, rules.ms_all.input],
-    output:
-        summary=join(SUMMARY_OUTPUT_DIR, "inspector_{sm}.tsv"),
-        missed_calls_dir=directory(join(SUMMARY_OUTPUT_DIR, "inspector_{sm}_missed")),
-    params:
-        script="workflow/scripts/metrics/calculate_precision_recall.py",
-        fglob_test=lambda wc: f"{wc.sm}*.bed",
-        fglob_truth=lambda wc: f"{wc.sm}/*.bed",
-        dtype=get_dtype,
-        output_dir=join("results", "misasim", "inspector"),
-        sim_output_dir=MISASIM_OUTPUT_DIR,
-
-
-use rule calculate_precision_recall as calculate_precision_recall_flagger with:
-    input:
-        chkpt=rules.flagger.input,
-    output:
-        summary=join(SUMMARY_OUTPUT_DIR, "flagger_{sm}.tsv"),
-        missed_calls_dir=directory(join(SUMMARY_OUTPUT_DIR, "flagger_{sm}_missed")),
-    params:
-        script="workflow/scripts/metrics/calculate_precision_recall.py",
-        fglob_test=lambda wc: f"{wc.sm}*/*.bed",
-        fglob_truth=lambda wc: f"{wc.sm}/*.bed",
-        dtype=get_dtype,
-        output_dir=join("results", "misasim", "flagger"),
-        sim_output_dir=MISASIM_OUTPUT_DIR,
-
-
-rule plot_precision_recall:
-    input:
-        summaries=[
-            rules.calculate_precision_recall.output.summary,
-            rules.calculate_precision_recall_inspector.output.summary,
-            rules.calculate_precision_recall_flagger.output.summary,
-        ],
-    output:
-        directory(join(SUMMARY_OUTPUT_DIR, "{sm}")),
-    params:
-        script="workflow/scripts/metrics/plot_precision_recall.py",
-        output_prefix=lambda wc, output: f"{output[0]}",
-    conda:
-        "../../envs/tools.yaml"
-    shell:
-        """
-        python {params.script} -i {input.summaries} -o {params.output_prefix}/
-        """
-
-
-rule plot_precision_recall_xy:
-    input:
-        summaries=[
-            rules.calculate_precision_recall.output.summary,
-            rules.calculate_precision_recall_inspector.output.summary,
-            rules.calculate_precision_recall_flagger.output.summary,
-        ],
-    output:
-        directory(join(SUMMARY_OUTPUT_DIR, "{sm}_xy")),
-    params:
-        script="workflow/scripts/metrics/plot_precision_recall_xy.py",
-        output_prefix=lambda wc, output: f"{output[0]}",
-    conda:
-        "../../envs/tools.yaml"
-    shell:
-        """
-        python {params.script} -i {input.summaries} -o {params.output_prefix}/
-        """
-
-
-rule generate_benchmarks:
-    input:
-        [
-            rules.ms_nucflag.input,
-            rules.flagger.input,
-            rules.inspector.input,
-        ],
-    output:
-        join(OUTPUT_DIR, "benchmark_plots", "rss.png"),
-        join(OUTPUT_DIR, "benchmark_plots", "minutes.png"),
-    params:
-        benchmark_dir_args=" ".join(
-            [
-                f"{f} {join(BENCHMARK_DIR, tool)}"
-                for (f, tool) in [
-                    ("-i", "inspector"),
-                    ("-f", "flagger"),
-                    ("-i", "inspector"),
-                ]
-            ]
-        ),
-        script="workflow/scripts/metrics/aggregate_benchmarks.py",
-        output_dir=lambda wc, output: dirname(output[0]),
-    shell:
-        """
-        python {params.script} {params.benchmark_dir_args} -o {params.output_dir}
-        """
+include: "benchmarks.smk"
 
 
 rule all:
@@ -460,10 +347,5 @@ rule all:
         rules.ms_nucflag.input,
         rules.flagger.input,
         rules.inspector.input,
-        expand(rules.calculate_precision_recall.output, sm=SAMPLES),
-        expand(rules.calculate_precision_recall_inspector.output, sm=SAMPLES),
-        expand(rules.calculate_precision_recall_flagger.output, sm=SAMPLES),
-        expand(rules.plot_precision_recall.output, sm=SAMPLES),
-        expand(rules.plot_precision_recall_xy.output, sm=SAMPLES),
-        rules.generate_benchmarks.output,
+        rules.benchmarks_all.input,
     default_target: True

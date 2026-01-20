@@ -1,0 +1,81 @@
+import sys
+import argparse
+import polars as pl
+import seaborn as sns
+import matplotlib.pyplot as plt
+import matplotlib.patheffects as pe
+
+OUTFILE_KWARGS = dict(file=sys.stdout, sep="\t")
+LEGEND_KWARGS = dict(
+    handlelength=1.0,
+    handleheight=1.0,
+    borderaxespad=0,
+    fancybox=False,
+    title=None,
+    frameon=False,
+)
+
+
+# https://www.statology.org/what-is-a-good-f1-score/
+# F1 Score = 2 * (Precision * Recall) / (Precision + Recall)
+def calculate_metrics(df: pl.DataFrame) -> tuple[float, float, float]:
+    prec = df["precision"].mean()
+    recall = df["recall"].mean()
+    f1 = 2 * (prec * recall) / (prec + recall)
+    return prec, recall, f1
+
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument(
+        "-i", "--input_summary_globs", help="Input summary globs", nargs="+"
+    )
+    ap.add_argument("-l", "--labels", help="Labels", nargs="+")
+    ap.add_argument("-c", "--colors", help="Colors", nargs="+")
+    ap.add_argument("-o", "--output", help="Output plot", default="out.png")
+    args = ap.parse_args()
+
+    labels = []
+    metrics = []
+    types = []
+    print("label", "precision", "recall", "f1", **OUTFILE_KWARGS)
+    for glob_file, label in zip(args.input_summary_globs, args.labels, strict=True):
+        df_summaries = pl.read_csv(
+            glob_file,
+            separator="\t",
+            glob=True,
+            has_header=True,
+        )
+        prec, recall, f1 = calculate_metrics(df_summaries)
+
+        labels.extend((label, label, label))
+        metrics.extend((prec, recall, f1))
+        types.extend(("Precision", "Recall", "F1"))
+
+        print(label, prec, recall, f1, **OUTFILE_KWARGS)
+
+    df = pl.DataFrame({"label": labels, "percent": metrics, "type": types})
+    fig, ax = plt.subplots(layout="constrained", figsize=(16, 8))
+    sns.barplot(df, x="label", y="percent", hue="type", legend="full", ax=ax)
+    for bar in ax.containers:
+        ax.bar_label(bar, fontsize=10, fmt=lambda x: f"{x * 100:.1f}%")
+
+    for spine in ["top", "right"]:
+        ax.spines[spine].set_visible(False)
+
+    ax.tick_params(axis="x", labelrotation=45)
+
+    label_colors = dict(zip(args.labels, args.colors, strict=True))
+    # Recolor x-ticklabels based on colors
+    for lbl in ax.get_xticklabels():
+        lbl.set_color(label_colors.get(lbl.get_text(), "white"))
+        lbl.set_path_effects([pe.Stroke(linewidth=0.2, foreground="black")])
+
+    ax.set_xlabel(None)
+    ax.set_ylabel("Percent (%)")
+    sns.move_legend(ax, loc="upper right", **LEGEND_KWARGS)
+    fig.savefig(args.output, bbox_inches="tight")
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
