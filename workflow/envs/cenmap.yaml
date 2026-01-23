@@ -1,0 +1,6 @@
+channels:
+  - conda-forge
+  - bioconda
+dependencies:
+  - cenmap==1.2.0
+  - snakemake-executor-plugin-lsf

@@ -24,7 +24,9 @@ GOOD_MTYPES = {
     "correct",
     "good",
     "Hap",
+    # This hurts the recall but we cannot confidently call as error.
     "het_mismap",
+    # These are repeat errors and usually sequencing errors.
     "scaffold",
     "homopolymer",
     "simple_repeat",

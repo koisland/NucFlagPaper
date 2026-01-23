@@ -119,7 +119,8 @@ rule plot_stats_f1_all:
         -i {input.summaries} \
         -l {params.labels} \
         -c {params.colors} \
-        -o {output.plot} > {output.tsv}
+        -o {output.plot} \
+        -s "(8, 8)" > {output.tsv}
         """
 
 

@@ -137,7 +137,47 @@ rule plot_qv_comparison:
         """
 
 
-# UL ont coverage increases by 3.2 fold.
+# Plot error
+rule plot_err_comparison:
+    input:
+        calls_r1=expand(
+            rules.run_nucflag.output.calls,
+            sm=DATA.keys(),
+            release="R1",
+        ),
+        calls_r2=expand(
+            rules.run_nucflag.output.calls,
+            sm=DATA.keys(),
+            release="R2",
+        ),
+    output:
+        png_cmp_sm=join(OUTPUT_DIR, "plots", "hprc_err_comparison_by_sm.png"),
+        png_diff_by_name=join(
+            OUTPUT_DIR, "plots", "hprc_err_comparison_diff_by_name.png"
+        ),
+        sm_diff=join(OUTPUT_DIR, "plots", "hprc_err_comparison_by_sample.tsv"),
+        name_diff=join(OUTPUT_DIR, "plots", "hprc_err_comparison_by_name.tsv"),
+        sm_name_diff=join(
+            OUTPUT_DIR, "plots", "hprc_err_comparison_by_sample_and_name.tsv"
+        ),
+    params:
+        script="workflow/scripts/compare_hprc/plot_err_compare.py",
+    conda:
+        "../../envs/tools.yaml"
+    shell:
+        """
+        python {params.script} \
+        -a <(cat {input.calls_r1}) \
+        -b <(cat {input.calls_r2}) \
+        -nd {output.name_diff} \
+        -sd {output.sm_diff} \
+        -snd {output.sm_name_diff} \
+        -o {output.png_cmp_sm} \
+        -n {output.png_diff_by_name}
+        """
+
+
+# UL ont coverage increases by 24.0x.
 rule plot_ul_ont:
     input:
         mdata_r1="data/compare_hprc/hprc_r1_data.tsv.gz",
@@ -167,5 +207,6 @@ rule all:
             release=RELEASES,
         ),
         rules.plot_qv_comparison.output,
+        rules.plot_err_comparison.output,
         rules.plot_ul_ont.output,
     default_target: True

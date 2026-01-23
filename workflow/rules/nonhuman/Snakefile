@@ -23,6 +23,7 @@ BENCHMARK_DIR = config["benchmarks_dir"]
 DATA = config["samples"]
 REFERENCE = config.get("reference", "Col-PEK")
 SAMPLES_NO_REF = [sm for sm in DATA.keys() if sm != REFERENCE]
+SAMPLES_HIFI = [f"{sm}_hifi" for sm in DATA.keys()]
 
 
 rule download_data:
@@ -137,9 +138,103 @@ module align_asm_to_ref:
 use rule * from align_asm_to_ref as asm_ref_*
 
 
+# Generate mismatch only ideograms with centromere ideogram
+rule generate_ideogram_mismatch:
+    input:
+        bed_cen=lambda wc: DATA[wc.sm.split("_")[0]]["bed_centromeres"],
+        bed_misassemblies=rules.check_asm_nucflag.output.misassemblies,
+        fai=lambda wc: expand(
+            rules.download_data.output.data, sm=wc.sm.split("_")[0], dtype="assembly"
+        )[0]
+        + ".fai",
+    output:
+        ideogram=multiext(
+            join(OUTPUT_DIR, "{sm}_only_mismatch_ideogram"), ".png", ".pdf"
+        ),
+    conda:
+        "../Snakemake-NucFlag/workflow/env/nucflag.yaml"
+    params:
+        output_prefix=lambda wc, output: splitext(output[0])[0],
+    shell:
+        """
+        nucflag ideogram \
+        -i <(awk -v OFS="\\t" '{{
+            if ($4 != "mismatch" && NR > 1 ) {{
+                $4="correct";
+                $9="206,206,206"
+            }};
+            print
+        }}' {input.bed_misassemblies}) \
+        -c <(join {input.bed_cen} {input.fai} | \
+        awk -v OFS="\\t" '{{
+            len=$3-$2;
+            midpt=int($2+(len/2));
+            print $1, 0, $2, ".", "gneg";
+            print $1, $2, midpt, ".", "acen";
+            print $1, midpt, $3, ".", "acen";
+            print $1, $3, $4, ".", "gneg"
+        }}') \
+        -o {params.output_prefix}
+        """
+
+
+rule agg_qv_stats_against_reported:
+    input:
+        bed_qv=expand(rules.calculate_qv.output, sm=SAMPLES_HIFI),
+        reported_qv="data/nonhuman/all_qv.tsv",
+    output:
+        join(
+            OUTPUT_DIR,
+            "qv_stats_against_reported.png",
+        ),
+    conda:
+        "../../envs/tools.yaml"
+    params:
+        script="workflow/scripts/nonhuman/qv_agg_stats.py",
+        labels=" ".join(DATA.keys()),
+    shell:
+        """
+        python {params.script} \
+        -i {input.bed_qv} \
+        -l {params.labels} \
+        -r {input.reported_qv} \
+        -o {output}
+        """
+
+
+rule intersect_cen:
+    input:
+        bed_cen=lambda wc: DATA[wc.sm.split("_")[0]]["bed_centromeres"],
+        bed_calls=rules.check_asm_nucflag.output.misassemblies,
+    output:
+        bed_calls_cen=pipe(join(OUTPUT_DIR, "{sm}_cens.bed")),
+    conda:
+        "../../envs/tools.yaml"
+    shell:
+        """
+        bedtools intersect -a {input.bed_calls} -b {input.bed_cen} > {output}
+        """
+
+
+rule agg_calls_cen:
+    input:
+        expand(rules.intersect_cen.output, sm=SAMPLES_HIFI),
+    output:
+        bed_calls_cen=join(OUTPUT_DIR, "all_cens_status.bed"),
+    conda:
+        "../Snakemake-NucFlag/workflow/env/nucflag.yaml"
+    shell:
+        """
+        nucflag status -i <(cat {input}) > {output}
+        """
+
+
 rule all:
     input:
         expand(rules.download_data.output, dtype=["assembly", "hifi"], sm=DATA.keys()),
         rules.nucflag.input,
-        expand(rules.calculate_qv.output, sm=[f"{sm}_hifi" for sm in DATA.keys()]),
+        expand(rules.calculate_qv.output, sm=SAMPLES_HIFI),
         expand(rules.asm_ref_SafFire.output.bed, ref=REFERENCE, sm=SAMPLES_NO_REF),
+        expand(rules.generate_ideogram_mismatch.output, sm=SAMPLES_HIFI),
+        rules.agg_calls_cen.output,
+        rules.agg_qv_stats_against_reported.output,

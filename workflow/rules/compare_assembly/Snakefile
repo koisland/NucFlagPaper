@@ -98,6 +98,7 @@ include: "compare_homopolymers.smk"
 include: "liftover.smk"
 include: "draw_ng50.smk"
 include: "compare_all.smk"
+include: "cenmap.smk"
 
 
 rule all:
@@ -109,3 +110,4 @@ rule all:
         rules.draw_ng50.output,
         rules.liftover_all.input,
         rules.compare_all.input,
+        rules.cenmap_all.input,

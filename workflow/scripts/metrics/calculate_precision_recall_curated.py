@@ -23,6 +23,7 @@ DEFAULT_READ_CSV_PARAMS = dict(
     has_header=False,
     truncate_ragged_lines=True,
 )
+# Different than simulated because Q100 also wants to fix homopolymer errors.
 GOOD_MTYPES = {"correct", "good", "Hap"}
 
 

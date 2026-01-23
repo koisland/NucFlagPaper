@@ -1,5 +1,6 @@
 import json
 import argparse
+import sys
 import matplotlib.colors
 
 import polars as pl
@@ -12,12 +13,19 @@ from supervenn import supervenn, make_sets_from_chunk_sizes
 
 
 RENAME_TOOLS = {
+    "nucflag_no_homopolymers": "NucFlag v1.0 (No homopolymers)",
     "nucflag": "NucFlag v1.0",
+    "deepvariant": "DeepVariant v1.9 (FILTER=='PASS')",
     "flagger": "HMM-Flagger v1.1.0",
     "inspector": "Inspector v1.3",
-    "deepvariant": "DeepVariant v1.9 (FILTER=='PASS')",
 }
-COLORS = ["purple", "magenta", "teal", "maroon"]
+COLORS = dict(
+    zip(
+        RENAME_TOOLS.values(),
+        ["blue", "purple", "maroon", "magenta", "teal"],
+        strict=True,
+    )
+)
 
 
 def main():
@@ -58,6 +66,24 @@ def main():
                     (call["name"], tool),
                 )
             )
+        if tool == "nucflag":
+            df_homopolymers_only = df_call.filter(
+                ~pl.col("name").eq("homopolymer")
+            ).with_columns(len=pl.col("chromEnd") - pl.col("chromStart"))
+            print(
+                f"Homopolymer length total: {df_homopolymers_only['len'].sum()}",
+                file=sys.stderr,
+            )
+            for call in df_call.filter(~pl.col("name").eq("homopolymer")).iter_rows(
+                named=True
+            ):
+                itree_calls[call["#chrom"]].add(
+                    Interval(
+                        call["chromStart"],
+                        call["chromEnd"],
+                        (call["name"], f"{tool}_no_homopolymers"),
+                    )
+                )
 
     ovl_counts: Counter[str] = Counter()
     all_ovls = set()
@@ -86,7 +112,7 @@ def main():
                     file=fh,
                 )
             else:
-                file_handles[ovl_name] = open(f"{output_prefix}_{ovl_name}.tsv", "wt")
+                file_handles[ovl_name] = open(f"{output_prefix}_{ovl_name}.bed", "wt")
             ovl_counts[ovl_name] += 1
             all_ovls.add(ovl_sorted)
 
@@ -104,10 +130,11 @@ def main():
         rows_ovl_counts.append(row)
 
     df_ovl_counts = pl.DataFrame(rows_ovl_counts, orient="row").to_pandas()
-
+    # Reorder.
+    df_ovl_counts = df_ovl_counts[[*COLORS.keys(), "size"]]
     fig, ax = plt.subplots(figsize=(16, 8), dpi=600, layout="constrained")
     sets, labels = make_sets_from_chunk_sizes(df_ovl_counts)
-    colors = [matplotlib.colors.to_rgba(color, alpha=0.5) for color in COLORS]
+    colors = [matplotlib.colors.to_rgba(COLORS[label], alpha=0.5) for label in labels]
     supervenn(
         sets,
         labels,

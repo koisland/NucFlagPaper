@@ -1,4 +1,5 @@
 import sys
+import ast
 import argparse
 import polars as pl
 import seaborn as sns
@@ -32,6 +33,7 @@ def main():
     )
     ap.add_argument("-l", "--labels", help="Labels", nargs="+")
     ap.add_argument("-c", "--colors", help="Colors", nargs="+")
+    ap.add_argument("-s", "--figsize", help="Figure size.", type=str, default="(16, 8)")
     ap.add_argument("-o", "--output", help="Output plot", default="out.png")
     args = ap.parse_args()
 
@@ -55,10 +57,13 @@ def main():
         print(label, prec, recall, f1, **OUTFILE_KWARGS)
 
     df = pl.DataFrame({"label": labels, "percent": metrics, "type": types})
-    fig, ax = plt.subplots(layout="constrained", figsize=(16, 8))
+    fig, ax = plt.subplots(layout="constrained", figsize=ast.literal_eval(args.figsize))
     sns.barplot(df, x="label", y="percent", hue="type", legend="full", ax=ax)
     for bar in ax.containers:
-        ax.bar_label(bar, fontsize=10, fmt=lambda x: f"{x * 100:.1f}%")
+        ax.bar_label(bar, fontsize=8, fmt=lambda x: f"{x * 100:.1f}%")
+
+    yticks = [tick / 100.0 for tick in range(0, 120, 20)]
+    ax.set_yticks(yticks, [f"{tick * 100.0:.1f}" for tick in yticks])
 
     for spine in ["top", "right"]:
         ax.spines[spine].set_visible(False)

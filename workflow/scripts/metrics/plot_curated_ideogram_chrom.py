@@ -15,25 +15,19 @@ CALL_COLOR_KEY = {
 }
 CALL_NAMES = {
     "truth": "Truth",
-    "false_positive": "Unclear",
+    "false_positive": "Ambiguous",
     "true_positive": "True Positive",
     "false_negative": "False Negative",
 }
 LBL_KWARGS = dict(rotation=0, ha="right", va="center", fontsize="medium")
-TOOL_NAMES = [
-    "Truth",
-    "NucFlag v1.0",
-    "Inspector v1.3",
-    "HMM-Flagger v1.1.0",
-    "DeepVariant v1.9.0",
-]
-TOOL_COLORS = ["black", "purple", "teal", "magenta", "maroon"]
-SEGDUP_ORDERING = (
-    r"Less than 90% similarity",
-    r"90 - 98% similarity",
-    r"98 - 99% similarity",
-    r"Greater than 99% similarity",
-)
+TOOL_COLORS = {
+    "Truth": "black",
+    "Inspector v1.3": "teal",
+    "HMM-Flagger v1.1.0": "magenta",
+    "DeepVariant v1.9.0": "maroon",
+    "NucFlag v1.0": "purple",
+}
+TOOLS = list(TOOL_COLORS.keys())
 DF_CENSAT_COLORS = pl.DataFrame(
     {
         "item_rgb": [
@@ -73,10 +67,10 @@ DF_CENSAT_COLORS = pl.DataFrame(
 SEGDUP_COLORS = dict(
     zip(
         [
-            r"Less than 90% similarity",
-            r"90 - 98% similarity",
-            r"98 - 99% similarity",
-            r"Greater than 99% similarity",
+            r"<90% similarity",
+            r"90-98% similarity",
+            r"98-99% similarity",
+            r">99% similarity",
         ],
         ["#800080", "#808080", "#ffff00ff", "#ffa500"],
     )
@@ -127,8 +121,8 @@ def main():
         has_header=False,
         new_columns=["chrom", "st", "end", "type"],
     )
-    dfs_calls = [
-        pl.read_csv(
+    dfs_calls = {
+        "Truth": pl.read_csv(
             args.truth,
             separator="\t",
             columns=[0, 1, 2, 3],
@@ -136,33 +130,33 @@ def main():
         )
         .with_columns(type=pl.lit("truth"))
         .filter(pl.col("chrom") == args.chrom),
-        pl.read_csv(args.nucflag, **missed_calls_kwargs).filter(
+        "NucFlag v1.0": pl.read_csv(args.nucflag, **missed_calls_kwargs).filter(
             pl.col("chrom") == args.chrom
         ),
-        pl.read_csv(args.inspector, **missed_calls_kwargs).filter(
+        "Inspector v1.3": pl.read_csv(args.inspector, **missed_calls_kwargs).filter(
             pl.col("chrom") == args.chrom
         ),
-        pl.read_csv(args.flagger, **missed_calls_kwargs).filter(
+        "HMM-Flagger v1.1.0": pl.read_csv(args.flagger, **missed_calls_kwargs).filter(
             pl.col("chrom") == args.chrom
         ),
-        pl.read_csv(args.deepvariant, **missed_calls_kwargs).filter(
-            pl.col("chrom") == args.chrom
-        ),
-    ]
+        "DeepVariant v1.9.0": pl.read_csv(
+            args.deepvariant, **missed_calls_kwargs
+        ).filter(pl.col("chrom") == args.chrom),
+    }
     if not args.fp:
-        dfs_calls = [
-            df.filter(pl.col("type") != "false_positive").with_columns(
+        dfs_calls = {
+            lbl: df.filter(pl.col("type") != "false_positive").with_columns(
                 pl.col("type").cast(pl.Enum(CALL_COLOR_KEY.keys()))
             )
-            for df in dfs_calls
-        ]
+            for lbl, df in dfs_calls.items()
+        }
         color_key = CALL_COLOR_KEY
         color_key.pop("false_positive")
     else:
-        dfs_calls = [
-            df.with_columns(pl.col("type").cast(pl.Enum(CALL_COLOR_KEY.keys())))
-            for df in dfs_calls
-        ]
+        dfs_calls = {
+            lbl: df.with_columns(pl.col("type").cast(pl.Enum(CALL_COLOR_KEY.keys())))
+            for lbl, df in dfs_calls.items()
+        }
         color_key = CALL_COLOR_KEY
 
     df_segdup = (
@@ -190,13 +184,13 @@ def main():
         .filter(pl.col("chrom") == args.chrom)
         .with_columns(
             name=pl.when(pl.col("filter_score") < 0.9)
-            .then(pl.lit(r"Less than 90% similarity"))
+            .then(pl.lit(r"<90% similarity"))
             .when(pl.col("filter_score").is_between(0.9, 0.98))
-            .then(pl.lit(r"90 - 98% similarity"))
+            .then(pl.lit(r"90-98% similarity"))
             .when(pl.col("filter_score").is_between(0.98, 0.99))
-            .then(pl.lit(r"98 - 99% similarity"))
-            .otherwise(pl.lit(r"Greater than 99% similarity"))
-            .cast(pl.Enum(SEGDUP_ORDERING))
+            .then(pl.lit(r"98-99% similarity"))
+            .otherwise(pl.lit(r">99% similarity"))
+            .cast(pl.Enum(SEGDUP_COLORS.keys()))
         )
     )
     df_censat = (
@@ -225,7 +219,7 @@ def main():
     )
 
     color_key = CALL_COLOR_KEY
-    height_ratios = [0.5, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.5, 0.5, 0.5]  #
+    height_ratios = [0.25, 0.25, 0.5, 0.25, 0.25, 0.25, 0.25, 0.25, 0.5, 0.5, 0.5]  #
     fig, axes = plt.subplots(
         ncols=1,
         nrows=len(height_ratios),
@@ -235,9 +229,9 @@ def main():
     )
 
     indices_calls = range(3, 8)  #
-    idx_chrom = 0
-    idx_censat = 1
-    idx_segdup = 2
+    idx_censat = 0
+    idx_segdup = 1
+    idx_chrom = 2
     idx_censat_legend = 8  #
     idx_segdup_legend = 9  #
     idx_legend = 10  #
@@ -270,11 +264,11 @@ def main():
     # Add calls
     for i, idx in enumerate(indices_calls):
         ax_other: Axes = axes[idx]
-        df_calls = dfs_calls[i].sort(by="st")
+        tool_name = TOOLS[i]
+        df_calls = dfs_calls[tool_name].sort(by="st")
         ax_other.set_ylim(0, 1)
         minimize_ax(ax_other, remove_ticks=True)
-        tool_name = TOOL_NAMES[i]
-        ax_other.set_ylabel(tool_name, **LBL_KWARGS, color=TOOL_COLORS[i])
+        ax_other.set_ylabel(tool_name, **LBL_KWARGS, color=TOOL_COLORS[tool_name])
         print(tool_name)
         for row in df_calls.iter_rows(named=True):
             color = color_key[row["type"]]
@@ -307,7 +301,8 @@ def main():
 
         if i == idx_segdup_legend:
             labels_handles = {
-                categ: Patch(color=SEGDUP_COLORS[categ]) for categ in SEGDUP_ORDERING
+                categ: Patch(color=SEGDUP_COLORS[categ])
+                for categ in SEGDUP_COLORS.keys()
             }
 
         ax_legend.legend(

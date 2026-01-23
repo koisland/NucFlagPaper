@@ -102,7 +102,7 @@ def main():
         fancybox=False,
         frameon=False,
     )
-    ax.set_xlabel("Cumulative coverage (%)")
+    ax.set_xlabel(r"% of genome")
     ax.set_ylabel("Contig length (Mbp)")
     fig.savefig(args.output, bbox_inches="tight", dpi=600)
 

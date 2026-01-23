@@ -241,6 +241,10 @@ rule plot_mapq_with_consensus:
         """
 
 
+# TODO: Plot grouped bar with total repeats, intersection with element, and number of calls with MAPQ > 20 (99% accurate)
+# https://gatk.broadinstitute.org/hc/en-us/articles/360035531872-Phred-scaled-quality-scores
+
+
 # Calculate precision/recall again with homopolymer regions without element support removed.
 rule recalculate_precision_recall_w_intersect:
     input:

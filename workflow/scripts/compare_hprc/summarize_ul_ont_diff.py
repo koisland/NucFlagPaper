@@ -44,8 +44,12 @@ def main():
     df_both = pl.concat([df_r1, df_r2])
     df_wide_both = df_both.pivot(
         on="release", index="Sample", values="ONT >100kb"
-    ).with_columns(ratio=pl.col("2") / pl.col("1"))
-    print(f"Median increase: {df_wide_both['ratio'].median()}", file=sys.stderr)
+    ).with_columns(diff=pl.col("2") - pl.col("1"))
+
+    print(
+        f"Median increase in UL ONT coverage: {df_wide_both['diff'].median()}",
+        file=sys.stderr,
+    )
     fig, ax = plt.subplots(figsize=(16, 8), layout="constrained")
     sns.barplot(
         df_both,

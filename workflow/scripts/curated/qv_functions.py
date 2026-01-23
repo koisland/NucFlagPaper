@@ -1,7 +1,7 @@
 import sys
 import matplotlib.pyplot as plt
 
-from math import log10
+from math import log10, e
 from matplotlib.axes import Axes
 
 
@@ -22,6 +22,12 @@ def qv_merqury(
 # $ python -c "import math,sys; e,t = sys.argv[1:3]; print(-10 * math.log10(int(e) / int(t)))" 1 1670
 def qv_nucflag(bp_err: int, bp_total: int, ndigits: int = 3) -> float:
     return round(-10 * log10(bp_err / bp_total), ndigits)
+
+
+# Go back to bp_err from QV
+# $ python -c "import math,sys; qv,t = sys.argv[1:3]; print(math.e ** (float(qv) / -10) * int(t))" 30 100_000_000
+def qv_to_bp_err(qv: float, bp_total: int) -> int:
+    return e ** (qv / -10) * bp_total
 
 
 def main():

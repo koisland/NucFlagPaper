@@ -16,20 +16,20 @@ CALL_COLOR_KEY = {
 }
 CALL_NAMES = {
     "truth": "Truth",
-    "false_positive": "Unclear",
+    "false_positive": "Ambiguous",
     "true_positive": "True Positive",
     "false_negative": "False Negative",
 }
 BAND_COLORS = pyid.BANDCOL | {"none": (1.0, 1.0, 1.0)}
 LBL_KWARGS = dict(rotation=0, ha="right", va="center")
-TOOL_NAMES = [
-    "Truth",
-    "NucFlag v1.0",
-    "Inspector v1.3",
-    "HMM-Flagger v1.1.0",
-    "DeepVariant v1.9.0",
-]
-TOOL_COLORS = ["black", "purple", "teal", "magenta", "maroon"]
+TOOL_COLORS = {
+    "Truth": "black",
+    "Inspector v1.3": "teal",
+    "HMM-Flagger v1.1.0": "magenta",
+    "DeepVariant v1.9.0": "maroon",
+    "NucFlag v1.0": "purple",
+}
+TOOLS = list(TOOL_COLORS.keys())
 
 
 def minimize_ax(ax: Axes, *, remove_ticks: bool = False):
@@ -64,33 +64,33 @@ def main():
         has_header=False,
         new_columns=["chrom", "st", "end", "type"],
     )
-    dfs_calls = [
-        pl.read_csv(
+    dfs_calls = {
+        "Truth": pl.read_csv(
             args.truth,
             separator="\t",
             columns=[0, 1, 2, 3],
             new_columns=["chrom", "st", "end", "patch"],
         ).with_columns(type=pl.lit("truth")),
-        pl.read_csv(args.nucflag, **missed_calls_kwargs),
-        pl.read_csv(args.inspector, **missed_calls_kwargs),
-        pl.read_csv(args.flagger, **missed_calls_kwargs),
-        pl.read_csv(args.deepvariant, **missed_calls_kwargs),
-    ]
+        "NucFlag v1.0": pl.read_csv(args.nucflag, **missed_calls_kwargs),
+        "Inspector v1.3": pl.read_csv(args.inspector, **missed_calls_kwargs),
+        "HMM-Flagger v1.1.0": pl.read_csv(args.flagger, **missed_calls_kwargs),
+        "DeepVariant v1.9.0": pl.read_csv(args.deepvariant, **missed_calls_kwargs),
+    }
 
     if not args.fp:
-        dfs_calls = [
-            df.filter(pl.col("type") != "false_positive").with_columns(
+        dfs_calls = {
+            lbl: df.filter(pl.col("type") != "false_positive").with_columns(
                 pl.col("type").cast(pl.Enum(CALL_COLOR_KEY.keys()))
             )
-            for df in dfs_calls
-        ]
+            for lbl, df in dfs_calls.items()
+        }
         color_key = CALL_COLOR_KEY
         color_key.pop("false_positive")
     else:
-        dfs_calls = [
-            df.with_columns(pl.col("type").cast(pl.Enum(CALL_COLOR_KEY.keys())))
-            for df in dfs_calls
-        ]
+        dfs_calls = {
+            lbl: df.with_columns(pl.col("type").cast(pl.Enum(CALL_COLOR_KEY.keys())))
+            for lbl, df in dfs_calls.items()
+        }
         color_key = CALL_COLOR_KEY
 
     df_fai = (
@@ -121,7 +121,7 @@ def main():
     # Draw overview
     outfile_overview = f"{args.output_prefix}_overview.png"
     fig_overview, axes_overview = plt.subplots(
-        nrows=len(TOOL_NAMES),
+        nrows=len(TOOLS),
         figsize=(5, 10),
         layout="constrained",
     )
@@ -130,9 +130,9 @@ def main():
         num = round((pct / 100) * total)
         return f"{pct:.1f}%\n({num})"
 
-    for i, (tool, color) in enumerate(zip(TOOL_NAMES, TOOL_COLORS)):
+    for i, (tool, color) in enumerate(TOOL_COLORS.items()):
         ax_overview: Axes = axes_overview[i]
-        df_calls = dfs_calls[i]
+        df_calls = dfs_calls[tool]
         type_counts = dict(df_calls["type"].value_counts().iter_rows())
         total_counts = sum(type_counts.values())
         ax_overview.pie(
@@ -229,10 +229,9 @@ def main():
                 if ax_row_idx == ax_row_indices_tracks[-1]:
                     continue
 
-                df_calls = dfs_calls[idx_data].filter(pl.col("chrom") == chrom_name_hap)
-
-                color = TOOL_COLORS[idx_data]
-                label = TOOL_NAMES[idx_data]
+                label = TOOLS[idx_data]
+                df_calls = dfs_calls[label].filter(pl.col("chrom") == chrom_name_hap)
+                color = TOOL_COLORS[label]
                 # Write stats
                 type_counts = dict(df_calls["type"].value_counts().iter_rows())
                 ax_stats.pie(

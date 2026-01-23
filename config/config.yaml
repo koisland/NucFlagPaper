@@ -18,3 +18,8 @@ assembly_config:
   nucflag_ont: "config/nucflag_ont_chm13.toml"
 hprc:
   manifest: "config/hprc_all_manifest.csv"
+nonhuman:
+  bed_centromeres:
+    Col-CEN: data/nonhuman/Col-CEN_centromeres.bed
+    Col-XJTU: data/nonhuman/Col-XJTU_centromeres.bed
+    Col-PEK: data/nonhuman/Col-PEK_centromeres.bed

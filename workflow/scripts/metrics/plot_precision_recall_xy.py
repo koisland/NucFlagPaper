@@ -112,6 +112,9 @@ def main():
                 except IndexError:
                     ax = axes[col]
 
+                if misassembly == "inversion":
+                    df_dtype = df_dtype.filter(pl.col(var) > 1)
+
                 ax.set_ylim(0.0, 100.0)
                 ax.set_xlim(df_dtype[var].min(), df_dtype[var].max())
 

@@ -180,16 +180,25 @@ def main():
     if args.output_dt_qv:
         df_dt_qv = (
             df_qv.with_columns(qv=(pl.col("x") + pl.col("y")) / 2.0)
-            .pivot(index="sm", on="label", values="qv")
-            .with_columns(dt_qv=pl.col("b") - pl.col("a"))
-            .select("sm", "dt_qv")
+            .pivot(index="sm", on="label", values=["qv", "len"])
+            .with_columns(
+                dt_qv=pl.col("qv_b") - pl.col("qv_a"),
+                dt_len=pl.col("len_b") - pl.col("len_a"),
+            )
+            .select("sm", "dt_qv", "dt_len")
         )
-        prop_increasing = (
+        prop_increasing_qv = (
             df_dt_qv["dt_qv"].filter(df_dt_qv["dt_qv"] > 0).count()
             / df_dt_qv["dt_qv"].len()
         )
+        prop_increasing_len = (
+            df_dt_qv["dt_len"].filter(df_dt_qv["dt_len"] > 0).count()
+            / df_dt_qv["dt_len"].len()
+        )
         print(f"Median QV increase: {df_dt_qv['dt_qv'].median()}", file=sys.stderr)
-        print(f"Ratio increasing: {prop_increasing}", file=sys.stderr)
+        print(f"Median length increase: {df_dt_qv['dt_len'].median()}", file=sys.stderr)
+        print(f"Ratio increasing QV: {prop_increasing_qv}", file=sys.stderr)
+        print(f"Ratio increasing length: {prop_increasing_len}", file=sys.stderr)
         df_dt_qv.write_csv(args.output_dt_qv, include_header=False, separator="\t")
 
     df_qv.write_csv(args.output_qv, separator="\t")
