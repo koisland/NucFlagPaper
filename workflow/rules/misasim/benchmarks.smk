@@ -132,8 +132,9 @@ rule generate_benchmarks:
             rules.inspector.input,
         ],
     output:
-        join(OUTPUT_DIR, "benchmark_plots", "rss.png"),
-        join(OUTPUT_DIR, "benchmark_plots", "minutes.png"),
+        join(OUTPUT_DIR, "benchmark_plots", "rss_gb.png"),
+        join(OUTPUT_DIR, "benchmark_plots", "hours.png"),
+        join(OUTPUT_DIR, "benchmark_plots", "summary.csv"),
     params:
         benchmark_dir_args=" ".join(
             [

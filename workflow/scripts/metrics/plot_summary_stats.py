@@ -1,10 +1,13 @@
 import sys
 import ast
 import argparse
+
 import polars as pl
 import seaborn as sns
 import matplotlib.pyplot as plt
 import matplotlib.patheffects as pe
+
+from matplotlib.axes import Axes
 
 OUTFILE_KWARGS = dict(file=sys.stdout, sep="\t")
 LEGEND_KWARGS = dict(
@@ -57,28 +60,44 @@ def main():
         print(label, prec, recall, f1, **OUTFILE_KWARGS)
 
     df = pl.DataFrame({"label": labels, "percent": metrics, "type": types})
-    fig, ax = plt.subplots(layout="constrained", figsize=ast.literal_eval(args.figsize))
-    sns.barplot(df, x="label", y="percent", hue="type", legend="full", ax=ax)
-    for bar in ax.containers:
-        ax.bar_label(bar, fontsize=8, fmt=lambda x: f"{x * 100:.1f}%")
-
-    yticks = [tick / 100.0 for tick in range(0, 120, 20)]
-    ax.set_yticks(yticks, [f"{tick * 100.0:.1f}" for tick in yticks])
-
-    for spine in ["top", "right"]:
-        ax.spines[spine].set_visible(False)
-
-    ax.tick_params(axis="x", labelrotation=45)
-
+    fig, axes = plt.subplots(
+        nrows=1, ncols=3, layout="tight", figsize=ast.literal_eval(args.figsize)
+    )
     label_colors = dict(zip(args.labels, args.colors, strict=True))
-    # Recolor x-ticklabels based on colors
-    for lbl in ax.get_xticklabels():
-        lbl.set_color(label_colors.get(lbl.get_text(), "white"))
-        lbl.set_path_effects([pe.Stroke(linewidth=0.2, foreground="black")])
 
-    ax.set_xlabel(None)
-    ax.set_ylabel("Percent (%)")
-    sns.move_legend(ax, loc="upper right", **LEGEND_KWARGS)
+    for i, col in enumerate(("Precision", "Recall", "F1")):
+        ax: Axes = axes[i]
+        df_type = df.filter(pl.col("type") == col)
+
+        sns.barplot(
+            df_type,
+            x="label",
+            y="percent",
+            hue="label",
+            palette=label_colors,
+            legend=None,
+            ax=ax,
+        )
+        for bar in ax.containers:
+            ax.bar_label(bar, fontsize=8, fmt=lambda x: f"{x * 100:.1f}%")
+
+        yticks = [tick / 100.0 for tick in range(0, 120, 20)]
+        ax.set_yticks(yticks, [f"{tick * 100.0:.1f}" for tick in yticks])
+
+        for spine in ["top", "right"]:
+            ax.spines[spine].set_visible(False)
+
+        for lbl in ax.xaxis.get_majorticklabels():
+            lbl.set_rotation(45)
+            lbl.set_horizontalalignment("right")
+            lbl.set_rotation_mode("anchor")
+            lbl.set_color(label_colors.get(lbl.get_text(), "white"))
+            lbl.set_path_effects([pe.Stroke(linewidth=0.2, foreground="black")])
+
+        ax.set_xlabel(None)
+        ax.set_ylabel("Percent (%)")
+        ax.set_title(col, fontsize="xx-large")
+
     fig.savefig(args.output, bbox_inches="tight")
 
 

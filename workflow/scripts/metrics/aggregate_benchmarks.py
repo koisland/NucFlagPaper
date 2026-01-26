@@ -42,7 +42,7 @@ def read_files(fglob: str) -> pl.DataFrame:
         .group_by(["sample", "dtype", "downsample", "mtype", "num", "len"])
         .agg(
             pl.col("step").first(),
-            pl.col("max_rss").max(),
+            pl.col("max_rss").max() / 1024,
             pl.col("max_vms").max(),
             pl.col("max_uss").max(),
             pl.col("max_pss").max(),
@@ -104,7 +104,7 @@ def main():
         "-i", "--inspector_bmks_dir", default="benchmarks/misasim/inspector"
     )
     ap.add_argument("-f", "--flagger_bmks_dir", default="benchmarks/misasim/flagger")
-    ap.add_argument("-o", "--output_dir", default="results/misasim/benchmarks")
+    ap.add_argument("-o", "--output_dir", default="results/misasim/benchmark_plots")
     args = ap.parse_args()
 
     df = (
@@ -128,18 +128,23 @@ def main():
                 "dtype": "Data",
                 "mtype": "Misassembly",
                 "method": "Method",
-                "max_rss": "Maximum RSS (MB)",
-                "minutes": "Wall Time (min)",
+                "max_rss": "Maximum RSS (GB)",
+                "hours": "Wall Time (hours)",
             }
         )
-        .to_pandas()
     )
 
     os.makedirs(args.output_dir, exist_ok=True)
-    g_rss = plot_agg(df, "Maximum RSS (MB)", TOOL_NAMES)
-    g_rss.savefig(os.path.join(args.output_dir, "rss.png"), dpi=600)
-    g_time = plot_agg(df, "Wall Time (min)", TOOL_NAMES)
-    g_time.savefig(os.path.join(args.output_dir, "minutes.png"), dpi=600)
+
+    df_summary = df.group_by(["Method", "Data"]).agg(
+        pl.col("Wall Time (hours)").median(), pl.col("Maximum RSS (GB)").median()
+    )
+    df_summary.write_csv(os.path.join(args.output_dir, "summary.csv"))
+
+    g_rss = plot_agg(df.to_pandas(), "Maximum RSS (GB)", TOOL_NAMES)
+    g_rss.savefig(os.path.join(args.output_dir, "rss_gb.png"), dpi=600)
+    g_time = plot_agg(df.to_pandas(), "Wall Time (hours)", TOOL_NAMES)
+    g_time.savefig(os.path.join(args.output_dir, "hours.png"), dpi=600)
 
 
 if __name__ == "__main__":

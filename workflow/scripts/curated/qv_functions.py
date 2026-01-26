@@ -68,7 +68,7 @@ def main():
     ]
     for ax, data, title, xlabel, color in axes_info:
         ax.set_xscale("log")
-        ax.set_title(title)
+        ax.set_title(title, fontsize="xx-large")
         ax.set_xlabel(xlabel)
 
         for val, qv in data:

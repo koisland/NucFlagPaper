@@ -139,8 +139,8 @@ def main():
         sets,
         labels,
         ax=ax,
-        min_width_for_annotation=600,
-        fontsize=8,
+        min_width_for_annotation=1200,
+        fontsize=12,
         color_cycle=colors,
     )
     fig.savefig(f"{output_prefix}_venn.png", bbox_inches="tight")

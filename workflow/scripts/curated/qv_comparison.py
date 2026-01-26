@@ -1,3 +1,4 @@
+import sys
 import argparse
 import scipy.stats
 
@@ -119,9 +120,15 @@ def main():
     # x - nucflag, y - merqury
     args = ap.parse_args()
 
-    def annotate(ax, data, **kws):
+    def add_regression_line_text(ax: Axes, data: pl.DataFrame, **kws):
         r, p = scipy.stats.pearsonr(data["qv_x"], data["qv_y"])
-        ax.text(0.05, 0.8, "r={:.2f}, p={:.2g}".format(r, p), transform=ax.transAxes)
+        ax.text(
+            0.05,
+            0.8,
+            "r={:.2f}, p={:.2g}".format(r, p),
+            fontsize="large",
+            transform=ax.transAxes,
+        )
 
     figs = []
     for label, color, qv_x, qv_y in zip(
@@ -151,10 +158,11 @@ def main():
 
         p = sns.jointplot(
             df_all,
-            # df_other_chrs,
             x="qv_x",
             y="qv_y",
             kind="reg",
+            xlim=(45, 55),
+            ylim=(30, 50),
             marker="o",
             color=color,
             line_kws=dict(color=color, linestyle="dotted"),
@@ -175,11 +183,27 @@ def main():
                 edgecolors="black",
             )
 
-        ax = plt.gca()
-        annotate(ax, df_all)
-        ax.set_title(label, color=color, x=0.1, y=0.95, weight="bold")
-        ax.set_xlabel(args.xlabel)
-        ax.set_ylabel(args.ylabel)
+        # set median.
+        median_x = df_x["qv_x"].median()
+        median_y = df_y["qv_y"].median()
+
+        ax: Axes = plt.gca()
+        ax.axvline(x=median_x, linestyle="dotted", color=color)
+        ax.axhline(y=median_y, linestyle="dotted", color=color)
+        print(label, median_x, median_y, file=sys.stderr, sep="\t")
+
+        add_regression_line_text(ax, df_all)
+        ax.set_title(
+            label,
+            color=color,
+            x=0.05,
+            y=0.95,
+            ha="left",
+            weight="bold",
+            fontsize="xx-large",
+        )
+        ax.set_xlabel(args.xlabel, fontsize="x-large")
+        ax.set_ylabel(args.ylabel, fontsize="x-large")
         # annotate(ax, df_other_chrs)
         figs.append(p)
 

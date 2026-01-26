@@ -28,6 +28,7 @@ LEGEND_KWARGS = dict(
     fancybox=False,
     frameon=False,
 )
+DIPLOID_GENOME_SIZE = 6_200_000_000
 
 
 def draw_combined_err_diff(df: pl.DataFrame, outfile: str, name_colors: dict[str, str]):
@@ -218,9 +219,12 @@ def main():
     draw_combined_err_diff(
         df_cmp_name_ab, outfile=args.output_name, name_colors=name_colors
     )
-
+    median_diff_called_bases = df_cmp_sm_ab["diff"].median()
+    perc_median_diff_called_bases = (
+        median_diff_called_bases / DIPLOID_GENOME_SIZE
+    ) * 100
     print(
-        f"Median reduction in called bases (Mbp) from a to b: {df_cmp_sm_ab['diff'].median()}"
+        f"Median reduction in called bases (Mbp) from a to b: {median_diff_called_bases} ({perc_median_diff_called_bases}%)"
     )
     df_cmp_ab.write_csv(args.output_sm_name_diff, separator="\t")
     df_cmp_sm_ab.write_csv(args.output_sm_diff, separator="\t")
