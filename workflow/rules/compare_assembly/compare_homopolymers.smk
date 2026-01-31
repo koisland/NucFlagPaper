@@ -1,14 +1,6 @@
 rule find_all_lcr_regions:
     input:
-        ref=lambda wc: (
-            expand(
-                rules.denovo_verkko_output.output, asm=wc.sm.split("_")[1], sm=wc.sm
-            )[0]
-            if wc.sm.split("_")[1] == "verkko"
-            else expand(
-                rules.denovo_hifiasm_output.output, asm=wc.sm.split("_")[1], sm=wc.sm
-            )[0]
-        ),
+        ref=lambda wc: get_assembly(wc.sm),
     output:
         bed=join(OUTPUT_DIR, "homopolymers", "{sm}_lcr.bed"),
     conda:
@@ -26,15 +18,7 @@ rule find_all_lcr_regions:
 rule label_lcr_regions_and_pos:
     input:
         script="workflow/scripts/curated/label_homopolymers.py",
-        ref=lambda wc: (
-            expand(
-                rules.denovo_verkko_output.output, asm=wc.sm.split("_")[1], sm=wc.sm
-            )[0]
-            if wc.sm.split("_")[1] == "verkko"
-            else expand(
-                rules.denovo_hifiasm_output.output, asm=wc.sm.split("_")[1], sm=wc.sm
-            )[0]
-        ),
+        ref=lambda wc: get_assembly(wc.sm),
         bed=rules.find_all_lcr_regions.output,
         calls=expand(
             rules.nf_denovo_check_asm_nucflag.output.misassemblies,

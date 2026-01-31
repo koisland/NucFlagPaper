@@ -8,30 +8,28 @@ rule download_annotations:
         gff=join(OUTPUT_DIR, "annot", "chm13.draft_v2.0.gene_annotation.gff3"),
         cytobands=join(OUTPUT_DIR, "annot", "chm13v2.0_cytobands_allchrs.bed"),
         censat=join(OUTPUT_DIR, "annot", "chm13v2.0_censat_v2.1.bed"),
+        segdups=join(OUTPUT_DIR, "annot", "segDups_2024.bed"),
+        segdups_bb=join(OUTPUT_DIR, "annot", "segDups_2024.bb"),
     params:
         url_gff="https://s3-us-west-2.amazonaws.com/human-pangenomics/T2T/CHM13/assemblies/annotation/chm13.draft_v2.0.gene_annotation.gff3",
         url_cytobands="https://s3-us-west-2.amazonaws.com/human-pangenomics/T2T/CHM13/assemblies/annotation/chm13v2.0_cytobands_allchrs.bed",
         url_censat="https://s3-us-west-2.amazonaws.com/human-pangenomics/T2T/CHM13/assemblies/annotation/chm13v2.0_censat_v2.1.bed",
+        url_sedef="https://s3-us-west-2.amazonaws.com/human-pangenomics/T2T/browser/CHM13/bbi/segDups_2024.bb",
+    conda:
+        "../../envs/tools.yaml"
     shell:
         """
         wget {params.url_gff} -O {output.gff}
         wget {params.url_cytobands} -O {output.cytobands}
         wget {params.url_censat} -O {output.censat}
+        wget {params.url_sedef} -O {output.segdups_bb}
+        bigbedtobed {output.segdups_bb} {output.segdups}
         """
 
 
 saffire_cfg = {
     "ref": {"CHM13v2.0": rules.download_chm13.output.fa},
-    "sm": {
-        sm: (
-            expand(rules.denovo_verkko_output.output, asm=sm.split("_")[1], sm=sm)[0]
-            if sm.split("_")[1] == "verkko"
-            else expand(
-                rules.denovo_hifiasm_output.output, asm=sm.split("_")[1], sm=sm
-            )[0]
-        )
-        for sm in config["samples"].keys()
-    },
+    "sm": {sm: get_assembly(sm) for sm in config["samples"].keys()},
     "temp_dir": join(OUTPUT_DIR, "saffire", "temp"),
     "output_dir": join(OUTPUT_DIR, "saffire"),
     "logs_dir": join(LOG_DIR, "saffire"),
@@ -71,6 +69,7 @@ rule liftover_annotations:
         gff=rules.download_annotations.output.gff,
         cytobands=rules.download_annotations.output.cytobands,
         censat=rules.download_annotations.output.censat,
+        segdups=rules.download_annotations.output.segdups,
     output:
         gff=join(OUTPUT_DIR, "annot", "{ref}_{sm}.gff"),
         gff_unmapped=join(OUTPUT_DIR, "annot", "{ref}_{sm}_unmapped.gff"),
@@ -80,6 +79,8 @@ rule liftover_annotations:
         ),
         censat=join(OUTPUT_DIR, "annot", "{ref}_{sm}_censat.bed"),
         censat_unmapped=join(OUTPUT_DIR, "annot", "{ref}_{sm}_censat_unmapped.bed"),
+        segdups=join(OUTPUT_DIR, "annot", "{ref}_{sm}_segdups.bed"),
+        segdups_unmapped=join(OUTPUT_DIR, "annot", "{ref}_{sm}_segdups_unmapped.bed"),
     conda:
         "../../envs/compare_assembly.yaml"
     shell:
@@ -87,6 +88,7 @@ rule liftover_annotations:
         liftOver {input.gff} {input.chain} {output.gff} {output.gff_unmapped} -gff
         liftOver {input.cytobands} {input.chain} {output.cytobands} {output.cytobands_unmapped}
         liftOver {input.censat} {input.chain} {output.censat} {output.censat_unmapped}
+        liftOver {input.segdups} {input.chain} {output.segdups} {output.segdups_unmapped} -bedPlus=9
         """
 
 

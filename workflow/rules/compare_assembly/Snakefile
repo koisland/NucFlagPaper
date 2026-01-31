@@ -11,6 +11,18 @@ ASM_COLORS = {
     "CHM13_verkko_2.2.1": "blue",
     "CHM13_verkko_2.3": "teal",
 }
+REF_SM = "CHM13v2.0"
+
+
+def get_assembly(sm):
+    if sm == "CHM13v2.0":
+        return rules.download_chm13.output.fa
+    elif sm.split("_")[1] == "verkko":
+        return expand(rules.denovo_verkko_output.output, asm=sm.split("_")[1], sm=sm)[0]
+    else:
+        return expand(rules.denovo_hifiasm_output.output, asm=sm.split("_")[1], sm=sm)[
+            0
+        ]
 
 
 rule download_chm13:
@@ -44,28 +56,37 @@ def get_reads_from_glob(data_src: dict) -> list[str]:
     return glob.glob(join(data_dir, glob_include))
 
 
-# Then run NucFlag on each assembly
-nf_config = {
-    "samples": [
+NF_SAMPLES = [
+    {
+        # Must have no underscores.
+        # Format: SM_verkko or SM_hifiasm
+        "name": f"{sm}_{dtype}",
+        "asm_fa": get_assembly(sm),
+        "reads": get_reads_from_glob(config["samples"][sm]["data"][dtype]),
+        "config": NUCFLAG_CONFIG[dtype],
+    }
+    for sm in config["samples"].keys()
+    for dtype in ["hifi", "ont"]
+]
+
+NF_SAMPLES.extend(
+    (
         {
-            # Must have no underscores.
-            # Format: SM_verkko or SM_hifiasm
-            "name": f"{sm}_{dtype}",
-            "asm_fa": (
-                expand(rules.denovo_verkko_output.output, asm=sm.split("_")[1], sm=sm)[
-                    0
-                ]
-                if sm.split("_")[1] == "verkko"
-                else expand(
-                    rules.denovo_hifiasm_output.output, asm=sm.split("_")[1], sm=sm
-                )[0]
+            "name": f"{REF_SM}_{dtype}",
+            "asm_fa": rules.download_chm13.output.fa,
+            # All reads the same.
+            "reads": get_reads_from_glob(
+                config["samples"]["CHM13_verkko_2.2.1"]["data"][dtype]
             ),
-            "reads": get_reads_from_glob(config["samples"][sm]["data"][dtype]),
             "config": NUCFLAG_CONFIG[dtype],
         }
-        for sm in config["samples"].keys()
         for dtype in ["hifi", "ont"]
-    ],
+    )
+)
+
+# Then run NucFlag on each assembly
+nf_config = {
+    "samples": NF_SAMPLES,
     "output_dir": join(OUTPUT_DIR, "nucflag"),
     "output_plots": False,
     "output_pileup": False,

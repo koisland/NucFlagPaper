@@ -1,3 +1,6 @@
+VG_SAMPLES = [*config["samples"].keys(), "CHM13v2.0"]
+
+
 """
 Rename the assemblies. We have two verkko versions so need a prefix.
 """
@@ -5,15 +8,7 @@ Rename the assemblies. We have two verkko versions so need a prefix.
 
 rule rename_assemblies:
     input:
-        asm=lambda wc: (
-            expand(
-                rules.denovo_verkko_output.output, asm=wc.sm.split("_")[1], sm=wc.sm
-            )[0]
-            if wc.sm.split("_")[1] == "verkko"
-            else expand(
-                rules.denovo_hifiasm_output.output, asm=wc.sm.split("_")[1], sm=wc.sm
-            )[0]
-        ),
+        asm=lambda wc: get_assembly(wc.sm),
     output:
         asm=join(OUTPUT_DIR, "vg", "{sm}.fa.gz"),
         asm_fai=join(OUTPUT_DIR, "vg", "{sm}.fa.gz.fai"),
@@ -57,7 +52,7 @@ rule generate_filtered_calls:
         """
         {{ grep -hP "{params.rgx_call_filter}" {input.beds} | \
         awk -v OFS="\\t" '{{ $1="{wildcards.sm}_"$1; print }}' | \
-        join - <(cut -f1,2 {input.fai}) | \
+        join - <(cut -f1,2 {input.fai} | sort -k1,1 -k2,2n) | \
         awk -v OFS="\\t" '{{
             ctg_len=$(NF);
             len=$3-$2;
@@ -74,7 +69,7 @@ checkpoint merge_beds:
     input:
         beds=expand(
             rules.generate_filtered_calls.output,
-            sm=config["samples"].keys(),
+            sm=VG_SAMPLES,
         ),
     output:
         calls_merged=join(OUTPUT_DIR, "vg", "filtered_calls_merged.bed"),
@@ -92,8 +87,7 @@ checkpoint merge_beds:
 
 ASM_VAR_GRAPH_CONFIG = {
     "assemblies": [
-        expand(rules.rename_assemblies.output.asm, sm=sm)
-        for sm in config["samples"].keys()
+        expand(rules.rename_assemblies.output.asm, sm=sm) for sm in VG_SAMPLES
     ],
     "regions": rules.merge_beds.output.calls_merged,
     "output_dir": join(OUTPUT_DIR, "vg"),
@@ -153,5 +147,5 @@ rule intersect_bubbles_w_calls:
 use rule all from VariantGraph as vg_all with:
     input:
         rules.vg_all.input,
-        expand(rules.intersect_bubbles_w_calls.output, sm=config["samples"].keys()),
+        expand(rules.intersect_bubbles_w_calls.output, sm=VG_SAMPLES),
     default_target: True

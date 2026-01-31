@@ -1,15 +1,7 @@
 
 rule run_cenmap:
     input:
-        asm=lambda wc: (
-            expand(
-                rules.denovo_verkko_output.output, asm=wc.sm.split("_")[1], sm=wc.sm
-            )[0]
-            if wc.sm.split("_")[1] == "verkko"
-            else expand(
-                rules.denovo_hifiasm_output.output, asm=wc.sm.split("_")[1], sm=wc.sm
-            )[0]
-        ),
+        asm=lambda wc: get_assembly(wc.sm),
     output:
         join(
             OUTPUT_DIR,

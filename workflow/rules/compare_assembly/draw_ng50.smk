@@ -2,20 +2,7 @@
 
 rule draw_ng50:
     input:
-        asm=[
-            (
-                expand(rules.denovo_verkko_output.output, asm=sm.split("_")[1], sm=sm)[
-                    0
-                ]
-                + ".fai"
-                if sm.split("_")[1] == "verkko"
-                else expand(
-                    rules.denovo_hifiasm_output.output, asm=sm.split("_")[1], sm=sm
-                )[0]
-                + ".fai"
-            )
-            for sm in config["samples"].keys()
-        ],
+        asm=[get_assembly(sm) + ".fai" for sm in config["samples"].keys()],
         ref=rules.download_chm13.output.fai,
     output:
         plot=join(OUTPUT_DIR, "ng50", "plot_ng50.png"),
