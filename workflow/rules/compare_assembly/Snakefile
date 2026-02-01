@@ -114,9 +114,9 @@ module NucFlagDenovoAsm:
 use rule * from NucFlagDenovoAsm as nf_denovo_*
 
 
+include: "liftover.smk"
 include: "asm_variant_graph.smk"
 include: "compare_homopolymers.smk"
-include: "liftover.smk"
 include: "draw_ng50.smk"
 include: "compare_all.smk"
 include: "cenmap.smk"
