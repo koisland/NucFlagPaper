@@ -25,7 +25,8 @@ TYPES = (
     "other_repeat",
     "softclip",
 )
-CMAP = plt.cm.get_cmap("OrRd")
+CMAP = plt.get_cmap("OrRd")
+NO_OVL_COLOR = "gray"
 NORM = matplotlib.colors.Normalize(vmin=0, vmax=100)
 LEGEND_KWARGS = dict(
     handlelength=1.0,
@@ -53,7 +54,7 @@ def minimalize_ax(ax: Axes, *, remove_ticks: bool = False) -> None:
         )
 
 
-def draw_perc_ovl_legend(obj: Axes | plt.Figure):
+def draw_perc_ovl_legend(obj: Axes | plt.Figure, window_size: int):
     # Draw perc overlap
     legend_handles_perc_calls = {}
     increment = 10
@@ -64,10 +65,12 @@ def draw_perc_ovl_legend(obj: Axes | plt.Figure):
         )
 
     obj.legend(
-        labels=legend_handles_perc_calls.keys(),
-        handles=legend_handles_perc_calls.values(),
-        # TODO: Don't hardcode.
-        title="Percent NucFlag call\noverlap in 100 Kbp window",
+        labels=[*legend_handles_perc_calls.keys(), "No overlap"],
+        handles=[
+            *legend_handles_perc_calls.values(),
+            Patch(edgecolor="black", facecolor=NO_OVL_COLOR),
+        ],
+        title=f"Percent NucFlag call\noverlap in {window_size / 1000} Kbp window",
         loc="center left",
         bbox_to_anchor=(1.0, 0.5),
         **LEGEND_KWARGS,
@@ -116,6 +119,7 @@ def main():
                 it.Interval(row["st"], row["end"], row["name"])
             )
 
+    all_labels = set(label_colors.keys())
     annotations: defaultdict[str, defaultdict[str, set[it.Interval]]] = defaultdict(
         lambda: defaultdict(set)
     )
@@ -162,6 +166,7 @@ def main():
         .select(*BEDPE_IMPG_COLS, "label")
         .collect()
     )
+    window_size = (df_liftover["rend"] - df_liftover["rst"]).median()
 
     figs = {}
     for rchrom in df_liftover["rchrom"].unique():
@@ -190,7 +195,7 @@ def main():
             ax: Axes = axes[idx]
             lbl_color = label_colors[lbl]
             ax.set_ylabel(lbl, rotation=0, ha="right", color=lbl_color)
-            if idx == len(axes):
+            if idx == len(axes) - 1:
                 ax.set_xlabel("Position (Mbp)")
             ax.margins(x=0)
             ax.set_yticks([], [])
@@ -221,6 +226,13 @@ def main():
                 color = CMAP(NORM(prop_calls))
                 ax_ref.axvspan(rst, rend, color=color)
 
+        # Color labels with no aligned region black.
+        missing_labels = all_labels.difference([rlabel, *df_grp["label"]])
+        for label in missing_labels:
+            i = label_order[label]
+            ax: Axes = axes[i]
+            ax.axvspan(rst, rend, color=NO_OVL_COLOR)
+
         for row in df_grp.iter_rows(named=True):
             itree = itrees_calls.get(row["qchrom"])
             if not itree:
@@ -249,7 +261,7 @@ def main():
         for ax in axes:
             ax.xaxis.set_major_formatter(formatter=lambda x, _: f"{x / 1_000_000:.1f}")
 
-        draw_perc_ovl_legend(fig)
+        draw_perc_ovl_legend(fig, window_size)
         fig.savefig(
             os.path.join(args.output_dir, f"{rchrom}.png"), bbox_inches="tight", dpi=300
         )

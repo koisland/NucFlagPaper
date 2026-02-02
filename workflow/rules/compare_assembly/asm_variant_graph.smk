@@ -144,7 +144,7 @@ rule intersect_bubbles_w_calls:
         """
 
 
-# Liftover transitively relative to CHM13v2.0 across all genomic intervals (excluding chrY).
+# Liftover relative to CHM13v2.0 across all genomic intervals (excluding chrY).
 rule query_chm13_impg:
     input:
         paf=rules.vg_ava_asm.output,
@@ -162,8 +162,7 @@ rule query_chm13_impg:
         # Query all regions from ava alignment.
         impg query \
         -b <(bedtools makewindows -b <(awk -v OFS="\\t" '{{ print "{params.chm13_prefix}"$1, 0, $2 }}' {input.fai} | grep -v chrY) -w {params.window}) \
-        -p {input.paf} -x |
-        sort -k1,1 -k2,2n -u | \
+        -p {input.paf} |
         gzip > {output.bed}
         """
 
