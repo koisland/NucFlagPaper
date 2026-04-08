@@ -1,5 +1,4 @@
 import argparse
-from matplotlib.colors import rgb2hex
 import polars as pl
 import seaborn as sns
 import matplotlib.pyplot as plt
@@ -7,6 +6,7 @@ import matplotlib.patheffects as pe
 
 from matplotlib.axes import Axes
 from matplotlib.text import Text
+from matplotlib.colors import rgb2hex
 
 
 # https://stackoverflow.com/a/67594395
@@ -69,6 +69,7 @@ def draw_bar_all(
             lbl.set_path_effects([pe.Stroke(linewidth=0.2, foreground="black")])
 
         ax.set_yticks(yticks, yticklabels)
+        ax.set_ylabel(None)
         ax.set_title(col)
         ax.tick_params(axis="x", rotation=45)
         for spine in ("top", "right"):
