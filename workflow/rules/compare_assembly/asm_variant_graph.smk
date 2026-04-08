@@ -93,8 +93,8 @@ ASM_VAR_GRAPH_CONFIG = {
     "output_dir": join(OUTPUT_DIR, "vg"),
     "log_dir": join(LOG_DIR, "vg"),
     "benchmark_dir": join(BENCHMARK_DIR, "vg"),
-    "threads_mm2": 12,
-    "mem_mm2": "100GB",
+    "threads_wfm": 40,
+    "mem_wfm": "250GB",
     "threads_mg": 12,
     "mem_mg": "30GB",
 }
@@ -154,6 +154,8 @@ rule query_chm13_impg:
     params:
         chm13_prefix=f"{REF_SM}_",
         window=100_000,
+        bp_merge=1,
+    threads: 24
     conda:
         "Snakemake-asm-evaluation-vg/workflow/envs/tools.yaml"
     shell:
@@ -161,8 +163,10 @@ rule query_chm13_impg:
         # Make windows for chm13v2.0
         # Query all regions from ava alignment.
         impg query \
+        -t {threads} \
         -b <(bedtools makewindows -b <(awk -v OFS="\\t" '{{ print "{params.chm13_prefix}"$1, 0, $2 }}' {input.fai} | grep -v chrY) -w {params.window}) \
-        -p {input.paf} |
+        -p {input.paf} \
+        -d {params.bp_merge} | \
         gzip > {output.bed}
         """
 
@@ -177,6 +181,9 @@ rule plot_heatmap_chm13_impg:
         annots=[
             rules.download_annotations.output.censat,
             rules.download_annotations.output.segdups,
+        ],
+        fais=[
+            expand(rules.rename_assemblies.output.asm_fai, sm=sm) for sm in VG_SAMPLES
         ],
     output:
         plot_dir=directory(join(OUTPUT_DIR, "vg", "plot_ava_asm_liftover_chm13")),
@@ -197,6 +204,7 @@ rule plot_heatmap_chm13_impg:
         -i {input.bed} \
         -b {input.calls} \
         -l {params.labels} \
+        -f {input.fais} \
         -c {params.colors} \
         -a {params.annots} \
         -al {params.annot_labels} \

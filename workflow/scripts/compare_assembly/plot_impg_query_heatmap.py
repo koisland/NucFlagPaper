@@ -13,7 +13,7 @@ from collections import defaultdict
 from functools import lru_cache
 
 
-BEDPE_IMPG_COLS = ("qchrom", "qst", "qend", "rchrom", "rst", "rend")
+BEDPE_IMPG_COLS = ("qchrom", "qst", "qend", "rchrom", "rst", "rend", "ritv")
 TYPES = (
     "insertion",
     "deletion",
@@ -27,6 +27,7 @@ TYPES = (
 )
 CMAP = plt.get_cmap("OrRd")
 NO_OVL_COLOR = "gray"
+CTG_BRK_COLOR = "black"
 NORM = matplotlib.colors.Normalize(vmin=0, vmax=100)
 LEGEND_KWARGS = dict(
     handlelength=1.0,
@@ -54,7 +55,7 @@ def minimalize_ax(ax: Axes, *, remove_ticks: bool = False) -> None:
         )
 
 
-def draw_perc_ovl_legend(obj: Axes | plt.Figure, window_size: int):
+def draw_perc_ovl_legend(obj: Axes | plt.Figure):
     # Draw perc overlap
     legend_handles_perc_calls = {}
     increment = 10
@@ -65,12 +66,13 @@ def draw_perc_ovl_legend(obj: Axes | plt.Figure, window_size: int):
         )
 
     obj.legend(
-        labels=[*legend_handles_perc_calls.keys(), "No overlap"],
+        labels=[*legend_handles_perc_calls.keys(), "No overlap", "Contig break"],
         handles=[
             *legend_handles_perc_calls.values(),
             Patch(edgecolor="black", facecolor=NO_OVL_COLOR),
+            Patch(edgecolor="black", facecolor=CTG_BRK_COLOR),
         ],
-        title=f"Percent NucFlag call\noverlap in {window_size / 1000} Kbp window",
+        title="Percent NucFlag call overlap",
         loc="center left",
         bbox_to_anchor=(1.0, 0.5),
         **LEGEND_KWARGS,
@@ -94,6 +96,7 @@ def main():
     ap.add_argument("-al", "--annotation_labels", nargs="+", help="Annotation labels.")
     ap.add_argument("-b", "--bed_calls", nargs="+", help="NucFlag bed files.")
     ap.add_argument("-l", "--labels", nargs="+", help="Labels for NucFlag calls.")
+    ap.add_argument("-f", "--fais", nargs="+", help="Fasta indexes for each label.")
     ap.add_argument("-c", "--colors", nargs="+", help="Colors for NucFlag calls.")
     ap.add_argument("-o", "--output_dir", default=".", help="Output plot dir.")
     args = ap.parse_args()
@@ -101,8 +104,9 @@ def main():
 
     label_colors: dict[str, str] = {}
     itrees_calls: defaultdict[str, it.IntervalTree] = defaultdict(it.IntervalTree)
-    for label, color, calls in zip(
-        args.labels, args.colors, args.bed_calls, strict=True
+    ctg_lengths: defaultdict[str, dict[str, int]] = defaultdict(dict)
+    for label, color, calls, fais in zip(
+        args.labels, args.colors, args.bed_calls, args.fais, strict=True
     ):
         df_calls = pl.read_csv(
             calls,
@@ -113,6 +117,14 @@ def main():
             new_columns=("chrom", "st", "end", "name"),
         ).filter(pl.col("name").is_in(TYPES))
 
+        df_fais = pl.read_csv(
+            fais,
+            columns=[0, 1],
+            separator="\t",
+            has_header=False,
+            new_columns=["chrom", "length"],
+        )
+        ctg_lengths[label] = dict(df_fais.iter_rows())
         label_colors[label] = color
         for row in df_calls.iter_rows(named=True):
             itrees_calls[f"{label}_{row['chrom']}"].add(
@@ -155,19 +167,21 @@ def main():
     label_order = {lbl: i + n_annotations for i, lbl in enumerate(label_colors.keys())}
 
     df_liftover = (
-        pl.scan_csv(
+        pl.read_csv(
             args.input_liftover,
             new_columns=list(BEDPE_IMPG_COLS),
             has_header=False,
             separator="\t",
         )
         .filter(pl.col("qchrom") != pl.col("rchrom"))
-        .with_columns(label=pl.col("qchrom").str.extract(r"^(.+)_[^_]*?$"))
-        .select(*BEDPE_IMPG_COLS, "label")
-        .collect()
+        .with_columns(
+            rlabel=pl.col("rchrom").str.extract(r"^(.+)_[^_]*?$"),
+            qlabel=pl.col("qchrom").str.extract(r"^(.+)_[^_]*?$"),
+        )
+        # No self-alignments
+        .filter(pl.col("rlabel") != pl.col("qlabel"))
+        .select(*BEDPE_IMPG_COLS, "rlabel", "qlabel")
     )
-    window_size = (df_liftover["rend"] - df_liftover["rst"]).median()
-
     figs = {}
     for rchrom in df_liftover["rchrom"].unique():
         fig, axes = plt.subplots(
@@ -204,8 +218,10 @@ def main():
 
         figs[rchrom] = (fig, axes)
 
-    for grp, df_grp in df_liftover.group_by(["rchrom", "rst", "rend"]):
-        rchrom, rst, rend = grp
+    for grp, df_grp in df_liftover.group_by(["ritv"]):
+        rchrom, ritv = grp[0].split(":")
+        rst, rend = ritv.split("-")
+        rst, rend = int(rst), int(rend)
         print(f"On {rchrom}:{rst}-{rend}", file=sys.stderr)
         fig, axes = figs[rchrom]
         rlabel, _ = rchrom.rsplit("_")
@@ -227,13 +243,44 @@ def main():
                 ax_ref.axvspan(rst, rend, color=color)
 
         # Color labels with no aligned region black.
-        missing_labels = all_labels.difference([rlabel, *df_grp["label"]])
+        missing_labels = all_labels.difference([rlabel, *df_grp["qlabel"]])
         for label in missing_labels:
             i = label_order[label]
             ax: Axes = axes[i]
             ax.axvspan(rst, rend, color=NO_OVL_COLOR)
 
-        for row in df_grp.iter_rows(named=True):
+        merged_rows = []
+        # Merge overlaps in query
+        for _, df_grp_qchrom in df_grp.group_by(["qchrom"]):
+            itree_grp_qchrom = it.IntervalTree(
+                it.Interval(qrow["qst"], qrow["qend"], qrow)
+                for qrow in df_grp_qchrom.iter_rows(named=True)
+            )
+            itree_grp_qchrom.merge_overlaps(
+                data_reducer=lambda curr_data, new_data: (
+                    {
+                        "qchrom": curr_data["qchrom"],
+                        "qst": curr_data["qst"],
+                        "qend": curr_data["qend"],
+                        "rchrom": curr_data["rchrom"],
+                        "rst": min(curr_data["rst"], new_data["rst"]),
+                        "rend": max(curr_data["rend"], new_data["rend"]),
+                        "ritv": curr_data["ritv"],
+                        "rlabel": curr_data["rlabel"],
+                        "qlabel": curr_data["qlabel"],
+                    }
+                )
+            )
+            merged_rows.extend(
+                (
+                    {**mdata, "qst": st, "qend": end}
+                    for st, end, mdata in itree_grp_qchrom.iter()
+                )
+            )
+
+        df_grp_merged = pl.DataFrame(merged_rows, orient="row")
+
+        for row in df_grp_merged.iter_rows(named=True):
             itree = itrees_calls.get(row["qchrom"])
             if not itree:
                 continue
@@ -242,26 +289,29 @@ def main():
             if not ovl:
                 continue
 
-            i = label_order[row["label"]]
+            i = label_order[row["qlabel"]]
             ax: Axes = axes[i]
-            window_length = row["qend"] - row["qst"]
+            window_length = row["rend"] - row["rst"]
             # Clip to region
             ovl_length = sum(
                 min(itv.end, row["qend"]) - max(itv.begin, row["qst"]) for itv in ovl
             )
-            prop_calls = (ovl_length / window_length) * 100
-            assert round(prop_calls) <= 100.0, (
-                f"Overlap intervals ({ovl}, {ovl_length}) exceeds query region bounds ({row}). {prop_calls}"
-            )
-
-            color = CMAP(NORM(prop_calls))
-            ax.axvspan(rst, rend, color=color)
+            # Clamp to 100
+            prop_calls = min(100.0, (ovl_length / window_length) * 100)
+            # Mark if at contig end
+            ctg_end = ctg_lengths[row["qlabel"]][row["qchrom"]]
+            at_ctg_end = any(itv.begin == 0 or itv.end == ctg_end for itv in ovl)
+            if at_ctg_end:
+                color = CTG_BRK_COLOR
+            else:
+                color = CMAP(NORM(prop_calls))
+            ax.axvspan(row["rst"], row["rend"], color=color)
 
     for rchrom, (fig, axes) in figs.items():
         for ax in axes:
             ax.xaxis.set_major_formatter(formatter=lambda x, _: f"{x / 1_000_000:.1f}")
 
-        draw_perc_ovl_legend(fig, window_size)
+        draw_perc_ovl_legend(fig)
         fig.savefig(
             os.path.join(args.output_dir, f"{rchrom}.png"), bbox_inches="tight", dpi=300
         )
