@@ -24,7 +24,7 @@ DEFAULT_READ_CSV_PARAMS = dict(
     truncate_ragged_lines=True,
 )
 # Different than simulated because Q100 also wants to fix homopolymer errors.
-GOOD_MTYPES = {"correct", "good", "Hap"}
+GOOD_MTYPES = {"correct", "good", "Hap", "het_or_mismap"}
 
 
 def calculate_precision_recall(

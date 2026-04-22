@@ -156,9 +156,11 @@ rule plot_ideogram_chrom:
     wildcard_constraints:
         chrom="|".join(CHROMS),
     output:
-        plot=join(IDEOGRAM_OUTPUT_DIR, "{chrom}_{cond}.png"),
+        png=join(IDEOGRAM_OUTPUT_DIR, "{chrom}_{cond}.png"),
+        pdf=join(IDEOGRAM_OUTPUT_DIR, "{chrom}_{cond}.pdf"),
     params:
         include_false_positives=lambda wc: "-f" if wc.cond == "fp" else "",
+        output_prefix=lambda wc, output: splitext(output[0])[0],
     conda:
         "../../envs/tools.yaml"
     shell:
@@ -172,7 +174,7 @@ rule plot_ideogram_chrom:
         --deepvariant {input.deepvariant_calls}/missed_calls.bed \
         --segdups {input.segdups} \
         --censat {input.censat} \
-        -o {output.plot} {params.include_false_positives} \
+        -o {params.output_prefix} {params.include_false_positives} \
         -c {wildcards.chrom}
         """
 

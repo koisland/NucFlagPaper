@@ -97,11 +97,17 @@ def main():
 
     handles.append(Patch(color="gray"))
     labels.append("Simple Repeat")
-    ax.legend(handles=handles, labels=labels, **legend_kwargs)
+    ax.legend(
+        handles=handles,
+        labels=labels,
+        bbox_to_anchor=(0.5, -0.3),
+        loc="center",
+        ncols=len(labels),
+        frameon=False,
+    )
 
-    fig.savefig("dip.png", bbox_inches="tight", dpi=600)
-
-    # Peak-calling
+    fig.savefig("dip.png", bbox_inches="tight", dpi=300)
+    fig.savefig("dip.pdf", bbox_inches="tight", dpi=300)
 
 
 if __name__ == "__main__":

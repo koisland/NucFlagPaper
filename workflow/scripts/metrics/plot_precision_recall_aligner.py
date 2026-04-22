@@ -89,7 +89,8 @@ def main():
             ax.set_ylim(0, 1.0)
 
         g.set_axis_labels(label, "Recall (%)")
-        g.savefig(f"{output_dir}/recall_{var}.png")
+        g.savefig(f"{output_dir}/recall_{var}.png", dpi=300)
+        g.savefig(f"{output_dir}/recall_{var}.pdf", dpi=300)
 
 
 if __name__ == "__main__":

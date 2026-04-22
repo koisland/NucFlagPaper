@@ -6,6 +6,8 @@ import matplotlib.pyplot as plt
 
 from matplotlib.axes import Axes
 
+plt.rcParams["font.family"] = "Arial"
+
 DF_READ_DEPTH = pl.DataFrame(
     {
         "sample": ["HG002", "HG002"],
@@ -73,6 +75,13 @@ def main():
         .join(DF_READ_DEPTH, on=["sample", "dtype"])
         .with_columns(coverage=(pl.col("perc_coverage") * pl.col("coverage")).round(1))
         .with_columns(pl.col("recall") * 100, pl.col("precision") * 100)
+        .with_columns(
+            f1=2
+            * (
+                (pl.col("recall") * pl.col("precision"))
+                / (pl.col("recall") + pl.col("precision"))
+            )
+        )
     )
     remove_spines = ["top", "right"]
     dtype_order = ["hifi", "ont_r10"]
@@ -84,13 +93,13 @@ def main():
         dtype_order = sorted(
             set(dtype_order).intersection(dtypes), key=lambda v: rank_dtype_order[v]
         )
-        for metric in ("precision", "recall"):
+        for metric in ("precision", "recall", "f1"):
             fig, axes = plt.subplots(
                 nrows=len(dtype_order),
                 ncols=3,
                 sharex=var == "len",
                 layout="constrained",
-                figsize=(16, 4 * len(dtype_order)),
+                figsize=(15, 3 * len(dtype_order)),
                 height_ratios=[0.5] * len(dtype_order),
             )
             labels_handles = {}
@@ -175,7 +184,8 @@ def main():
                 labels_handles.keys(),
                 loc="outside center right",
             )
-            fig.savefig(f"{output_prefix}{metric}_{var}.png")
+            fig.savefig(f"{output_prefix}{metric}_{var}.png", dpi=600)
+            fig.savefig(f"{output_prefix}{metric}_{var}.pdf", dpi=600)
             fig.clear()
 
 

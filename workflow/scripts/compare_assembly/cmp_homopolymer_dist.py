@@ -10,6 +10,9 @@ from matplotlib.axes import Axes
 from matplotlib.patches import Patch
 from scipy.stats import normaltest
 
+plt.rcParams["font.family"] = "Arial"
+
+
 NT_COLORS = {
     "A": "#009600",
     "C": "#0000FF",
@@ -54,7 +57,8 @@ def dunn_test(df_nt_bins: pl.DataFrame) -> dict[tuple[str, str], float]:
         lbl = lbl[0]
         nres = normaltest(df_vals["len"])
         assert nres.pvalue < 0.05, "One of labels is normally distributed"
-        print(f"{lbl} mean length: {df_vals['len'].mean()}", file=sys.stderr)
+        dim = df_vals.filter(pl.col("len") == pl.col("len").mean().cast(pl.Int64)).shape
+        print(f"{lbl} mean length: {df_vals['len'].mean()} ({dim[0]})", file=sys.stderr)
         print(f"{lbl}: {nres}", file=sys.stderr)
 
     # Use Kruskal-Wallis test and post-hoc Dunn to determine if any difference between medians of labels.
@@ -62,7 +66,7 @@ def dunn_test(df_nt_bins: pl.DataFrame) -> dict[tuple[str, str], float]:
     # https://www.statology.org/dunns-test-python/
     # H_0 - There is no significant difference in the median between a pair of labels.
     res = sp.posthoc_dunn(
-        [df["len"] for df in dfs_nt_label_bins.values()], p_adjust="bonferroni"
+        [df["len"] for df in dfs_nt_label_bins.values()], p_adjust="fdr_bh"
     )
     print(res, file=sys.stderr)
     labels = tuple(dfs_nt_label_bins.keys())
@@ -78,7 +82,7 @@ def dunn_test(df_nt_bins: pl.DataFrame) -> dict[tuple[str, str], float]:
 
 # https://rowannicholls.github.io/python/graphs/ax_based/boxplots_significance.html
 def draw_signif_brackets(
-    ax: Axes, x1: int, x2: int, level: int, ylim: tuple[float, float], p: float
+    ax: Axes, x1: int, x2: int, level: float, ylim: tuple[float, float], p: float
 ):
     # What level is this bar among the bars above the plot?
     # Plot the bar
@@ -100,7 +104,115 @@ def draw_signif_brackets(
     elif p < 0.05:
         sig_symbol = "*"
     text_height = bar_height + (y_range * 0.01)
-    ax.text((x1 + x2) * 0.5, text_height, sig_symbol, ha="center", va="bottom", c="k")
+    ax.text(
+        (x1 + x2) * 0.5,
+        text_height,
+        sig_symbol,
+        ha="center",
+        va="bottom",
+        c="k",
+        fontsize=14,
+    )
+
+
+def draw_plot_all(
+    df_bins: pl.DataFrame,
+    labels: list[str],
+    label_idxs: dict[str, int],
+    label_colors: dict[str, str],
+    figsize: tuple[int, int] = (8, 8),
+):
+    ylims = [(350, 400), (0, 100)]
+    fig, axes = plt.subplots(
+        nrows=2,
+        ncols=1,
+        figsize=figsize,
+        layout="constrained",
+        height_ratios=[(ylim[1] - ylim[0]) / 100.0 for ylim in ylims],
+    )
+    ax: Axes
+    ax1: Axes
+    ax2: Axes
+    alpha = 0.05
+    ax1 = axes[0]
+    ax2 = axes[1]
+    res_map = dunn_test(df_bins)
+
+    for ax, ylim in (
+        (ax1, ylims[0]),
+        (ax2, ylims[1]),
+    ):
+        sns.violinplot(
+            data=df_bins,
+            x="label",
+            y="len",
+            hue="label",
+            density_norm="count",
+            inner="quart",
+            legend=None,
+            palette=label_colors.values(),
+            hue_order=labels,
+            order=labels,
+            alpha=0.5,
+            ax=ax,
+            cut=0,
+        )
+        sns.stripplot(
+            data=df_bins,
+            x="label",
+            y="len",
+            hue="label",
+            jitter=0.001,
+            palette=label_colors.values(),
+            linewidth=1,
+            hue_order=labels,
+            order=labels,
+            legend=None,
+            alpha=0.5,
+            ax=ax,
+        )
+        ax.set_ylim(ylim)
+        ax.set_ylabel(None)
+
+    level = 0
+    for (label_1, label_2), p in res_map.items():
+        if p > alpha:
+            continue
+        x1 = label_idxs[label_1]
+        x2 = label_idxs[label_2]
+        draw_signif_brackets(
+            ax=ax1, x1=x1, x2=x2, level=level, ylim=ax1.get_ylim(), p=p
+        )
+        level += 2
+
+    for spine in ("top", "right", "bottom"):
+        ax1.spines[spine].set_visible(False)
+
+    for spine in ("top", "right"):
+        ax2.spines[spine].set_visible(False)
+
+    ax1.tick_params(
+        axis="x",
+        which="both",
+        bottom=False,
+    )
+    ax2.tick_params(axis="x", labelrotation=45)
+    ax1.tick_params(axis="both", which="major", labelsize=14)
+    ax2.tick_params(axis="both", which="major", labelsize=14)
+    ax1.set_xticks([], [])
+    ax1.set_xlabel(None)
+    ax2.set_xlabel(None)
+    add_slashes(ax1, ax2)
+
+    for lbl in ax.xaxis.get_majorticklabels():
+        lbl.set_rotation(45)
+        lbl.set_horizontalalignment("right")
+        lbl.set_rotation_mode("anchor")
+        lbl.set_fontsize(14)
+        lbl.set_color(label_colors.get(lbl.get_text(), "white"))
+
+    fig.supylabel("Homopolymer length (bp)", fontsize=14)
+    return fig
 
 
 def main():
@@ -117,16 +229,18 @@ def main():
         type=str,
         help="Homopolymer BED4 file labels",
     )
+    ap.add_argument("-c", "--colors", type=str, nargs="+")
     ap.add_argument(
         "-o",
-        "--output",
-        default="all.png",
-        help="Plot for all overlapped.",
+        "--output_prefix",
+        default="all",
+        help="Plot prefix for all overlapped.",
     )
 
     args = ap.parse_args()
 
     labels = args.labels
+    label_colors = dict(zip(labels, args.colors, strict=True))
     label_idxs = {label: i for i, label in enumerate(labels)}
     dfs_bins: list[pl.DataFrame] = []
     for label, file in zip(labels, args.bins, strict=True):
@@ -180,12 +294,13 @@ def main():
                 x="label",
                 y="len",
                 color=color,
-                split=True,
-                gap=0.5,
                 inner="quart",
                 legend=None,
+                density_norm="count",
                 order=labels,
+                hue_order=labels,
                 alpha=0.5,
+                cut=0,
                 ax=ax,
             )
             sns.stripplot(
@@ -197,6 +312,7 @@ def main():
                 jitter=0.001,
                 linewidth=1,
                 order=labels,
+                hue_order=labels,
                 legend=None,
                 alpha=0.5,
                 ax=ax,
@@ -213,7 +329,7 @@ def main():
             draw_signif_brackets(
                 ax=ax1, x1=x1, x2=x2, level=level, ylim=ax1.get_ylim(), p=p
             )
-            level += 1
+            level += 2
 
         for spine in ("top", "right", "bottom"):
             ax1.spines[spine].set_visible(False)
@@ -227,21 +343,37 @@ def main():
             bottom=False,
         )
         ax2.tick_params(axis="x", labelrotation=45)
+        ax1.tick_params(axis="both", which="major", labelsize=14)
+        ax2.tick_params(axis="both", which="major", labelsize=14)
         ax1.set_xticks([], [])
         ax1.set_xlabel(None)
         ax2.set_xlabel(None)
         add_slashes(ax1, ax2)
 
+        for lbl in ax.xaxis.get_majorticklabels():
+            lbl.set_rotation(45)
+            lbl.set_fontsize(14)
+            lbl.set_horizontalalignment("right")
+            lbl.set_rotation_mode("anchor")
+            lbl.set_color(label_colors.get(lbl.get_text(), "white"))
+
     fig.legend(
         handles=[
-            Patch(color=color, label=lbl, alpha=0.5) for lbl, color in NT_COLORS.items()
+            Patch(facecolor=color, edgecolor="black", label=lbl, alpha=0.5)
+            for lbl, color in NT_COLORS.items()
         ],
         loc="center left",
         bbox_to_anchor=(1, 0.9),
+        fontsize=14,
         **LEGEND_KWARGS,
     )
-    fig.supylabel("Homopolymer length (bp)")
-    fig.savefig(args.output, bbox_inches="tight")
+    fig.supylabel("Homopolymer length (bp)", fontsize=14)
+    fig.savefig(f"{args.output_prefix}.png", bbox_inches="tight", dpi=300)
+    fig.savefig(f"{args.output_prefix}.pdf", bbox_inches="tight", dpi=300)
+
+    fig_all = draw_plot_all(df_bins, labels, label_idxs, label_colors)
+    fig_all.savefig(f"{args.output_prefix}_all.png", bbox_inches="tight", dpi=300)
+    fig_all.savefig(f"{args.output_prefix}_all.pdf", bbox_inches="tight", dpi=300)
 
 
 if __name__ == "__main__":

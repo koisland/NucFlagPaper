@@ -132,7 +132,7 @@ def main():
     df_ovl_counts = pl.DataFrame(rows_ovl_counts, orient="row").to_pandas()
     # Reorder.
     df_ovl_counts = df_ovl_counts[[*COLORS.keys(), "size"]]
-    fig, ax = plt.subplots(figsize=(16, 8), dpi=600, layout="constrained")
+    fig, ax = plt.subplots(figsize=(16, 4), dpi=600, layout="constrained")
     sets, labels = make_sets_from_chunk_sizes(df_ovl_counts)
     colors = [matplotlib.colors.to_rgba(COLORS[label], alpha=0.5) for label in labels]
     supervenn(
@@ -140,10 +140,11 @@ def main():
         labels,
         ax=ax,
         min_width_for_annotation=1200,
-        fontsize=12,
+        fontsize=16,
         color_cycle=colors,
     )
     fig.savefig(f"{output_prefix}_venn.png", bbox_inches="tight")
+    fig.savefig(f"{output_prefix}_venn.pdf", bbox_inches="tight")
 
 
 if __name__ == "__main__":

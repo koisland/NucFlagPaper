@@ -25,7 +25,7 @@ GOOD_MTYPES = {
     "good",
     "Hap",
     # This hurts the recall but we cannot confidently call as error.
-    "het_mismap",
+    "het_or_mismap",
     # These are repeat errors and usually sequencing errors.
     "scaffold",
     "homopolymer",
@@ -107,6 +107,8 @@ def calculate_precision_recall(
     for row in df_bed_misassemblies.filter(
         ~pl.col("name").is_in(GOOD_MTYPES)
     ).iter_rows(named=True):
+        if row["st"] == row["end"]:
+            continue
         ovl = itree_ctrl_misassemblies_misasim_coords[row["chrom"]].overlap(
             row["st"], row["end"]
         )

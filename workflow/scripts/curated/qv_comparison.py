@@ -11,6 +11,9 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
 
+# https://kyrrego.github.io/blog/2025/01/31/my-first-blog.html
+plt.rcParams["font.family"] = "Arial"
+
 
 # Source - https://stackoverflow.com/a
 # Posted by ImportanceOfBeingErnest, modified by community. See post 'Timeline' for change history
@@ -115,7 +118,9 @@ def main():
         action="store_true",
         help="Highlight acrocentric chromosomes.",
     )
-    ap.add_argument("-o", "--output", required=True, help="Output plot.", type=str)
+    ap.add_argument(
+        "-o", "--output_prefix", required=True, help="Output plot prefix.", type=str
+    )
 
     # x - nucflag, y - merqury
     args = ap.parse_args()
@@ -228,7 +233,7 @@ def main():
             ],
         )
     gs.tight_layout(fig)
-    fig.savefig(args.output, bbox_inches="tight")
+    fig.savefig(f"{args.output_prefix}.png")
 
 
 if __name__ == "__main__":

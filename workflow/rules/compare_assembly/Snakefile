@@ -1,5 +1,5 @@
 import glob
-from os.path import join, dirname
+from os.path import join, dirname, splitext
 
 
 OUTPUT_DIR = config["output_dir"]
@@ -7,6 +7,7 @@ LOG_DIR = config["log_dir"]
 BENCHMARK_DIR = config["benchmark_dir"]
 NUCFLAG_CONFIG = config["nucflag_config"]
 ASM_COLORS = {
+    "CHM13v2.0": "red",
     "CHM13_hifiasm_0.25.0": "orange",
     "CHM13_verkko_2.2.1": "blue",
     "CHM13_verkko_2.3": "teal",

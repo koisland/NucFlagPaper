@@ -1,3 +1,4 @@
+
 rule find_all_lcr_regions:
     input:
         ref=lambda wc: get_assembly(wc.sm),
@@ -53,25 +54,31 @@ rule label_lcr_regions_and_pos:
 rule overlap_cmp_dist:
     input:
         script="workflow/scripts/compare_assembly/cmp_homopolymer_dist.py",
-        bins=expand(
-            rules.label_lcr_regions_and_pos.output.bins, sm=config["samples"].keys()
-        ),
+        bins=expand(rules.label_lcr_regions_and_pos.output.bins, sm=ASM_COLORS.keys()),
     output:
-        plot=join(OUTPUT_DIR, "homopolymers", "dist_homopolymers_w_signif.png"),
+        plot=[
+            join(OUTPUT_DIR, "homopolymers", "dist_homopolymers_w_signif.png"),
+            join(OUTPUT_DIR, "homopolymers", "dist_homopolymers_w_signif_all.png"),
+        ],
     conda:
         "../../envs/curated.yaml"
     params:
-        labels=" ".join(config["samples"].keys()),
+        labels=" ".join(ASM_COLORS.keys()),
+        colors=" ".join(ASM_COLORS.values()),
+        output_prefix=lambda wc, output: join(
+            dirname(output.plot[0]), "dist_homopolymers_w_signif"
+        ),
     shell:
         """
         python {input.script} \
         --bins {input.bins} \
         --labels {params.labels} \
-        -o {output.plot}
+        --colors {params.colors} \
+        -o {params.output_prefix}
         """
 
 
 rule cmp_homopolymers_all:
     input:
-        expand(rules.label_lcr_regions_and_pos.output, sm=config["samples"].keys()),
+        expand(rules.label_lcr_regions_and_pos.output, sm=ASM_COLORS.keys()),
         rules.overlap_cmp_dist.output,

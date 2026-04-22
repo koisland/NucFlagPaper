@@ -60,14 +60,18 @@ def cmd_contig_qv(wc, input):
 # Show concordance with Merqury and how both change as errors increase.
 rule plot_qv_functions:
     output:
-        plot=join(OUTPUT_DIR, "qv", "functions.png"),
+        plot=[
+            join(OUTPUT_DIR, "qv", "functions.png"),
+            join(OUTPUT_DIR, "qv", "functions.pdf"),
+        ],
     params:
         script="workflow/scripts/curated/qv_functions.py",
+        output_prefix=lambda wc, output: splitext(output[0])[0],
     conda:
         "../../envs/curated.yaml"
     shell:
         """
-        python {params.script} {output}
+        python {params.script} {params.output_prefix}
         """
 
 
@@ -85,7 +89,9 @@ rule plot_nucflag_merqury_qv_plot:
             version=reversed(ASSEMBLIES.keys()),
         ),
     output:
-        plot=join(OUTPUT_DIR, "qv", "HG002_qv.png"),
+        plot=[
+            join(OUTPUT_DIR, "qv", "HG002_qv.png"),
+        ],
     conda:
         "../../envs/curated.yaml"
     params:
@@ -96,6 +102,7 @@ rule plot_nucflag_merqury_qv_plot:
         ),
         labels=" ".join(reversed(ASSEMBLIES.keys())),
         colors=" ".join(["blue", "green", "red"]),
+        output_prefix=lambda wc, output: splitext(output[0])[0],
     log:
         os.path.join(LOGS_DIR, "plot_nucflag_merqury_qv_plot.log"),
     shell:
@@ -105,7 +112,7 @@ rule plot_nucflag_merqury_qv_plot:
         -y {params.nucflag_infiles} \
         -l {params.labels} \
         -c {params.colors} \
-        -o {output.plot} \
+        -o {params.output_prefix} \
         --highlight-acrocentrics 2> {log}
         """
 

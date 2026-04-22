@@ -15,6 +15,7 @@ exp
 
 # Ignore at root for testing
 /*.bed
+/*.pdf
 /*.png
 /*.xml
 

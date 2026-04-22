@@ -5,7 +5,6 @@ import argparse
 import polars as pl
 import seaborn as sns
 import matplotlib.pyplot as plt
-import matplotlib.patheffects as pe
 
 from matplotlib.axes import Axes
 
@@ -36,8 +35,8 @@ def main():
     )
     ap.add_argument("-l", "--labels", help="Labels", nargs="+")
     ap.add_argument("-c", "--colors", help="Colors", nargs="+")
-    ap.add_argument("-s", "--figsize", help="Figure size.", type=str, default="(16, 8)")
-    ap.add_argument("-o", "--output", help="Output plot", default="out.png")
+    ap.add_argument("-s", "--figsize", help="Figure size.", type=str, default="(16, 6)")
+    ap.add_argument("-o", "--output_prefix", help="Output plot prefix", default="out")
     args = ap.parse_args()
 
     labels = []
@@ -92,13 +91,14 @@ def main():
             lbl.set_horizontalalignment("right")
             lbl.set_rotation_mode("anchor")
             lbl.set_color(label_colors.get(lbl.get_text(), "white"))
-            lbl.set_path_effects([pe.Stroke(linewidth=0.2, foreground="black")])
+            # lbl.set_path_effects([pe.Stroke(linewidth=0.2, foreground="black")])
 
         ax.set_xlabel(None)
         ax.set_ylabel("Percent (%)")
         ax.set_title(col, fontsize="xx-large")
 
-    fig.savefig(args.output, bbox_inches="tight")
+    fig.savefig(f"{args.output_prefix}.png", bbox_inches="tight", dpi=300)
+    fig.savefig(f"{args.output_prefix}.pdf", bbox_inches="tight", dpi=300)
 
 
 if __name__ == "__main__":

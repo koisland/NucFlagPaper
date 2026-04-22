@@ -1,6 +1,6 @@
 import os
 import sys
-import pyfaidx
+import pysam
 import argparse
 
 import numpy as np
@@ -184,22 +184,21 @@ def plot_homopolymers_split(
 
 
 def process_one(fa: str, df_lcr: pl.DataFrame) -> tuple[str, it.IntervalTree]:
-    fh_fai = pyfaidx.Faidx(fa)
+    fh_fai = pysam.FastaFile(fa)
     itree = it.IntervalTree()
     chrom = str(df_lcr["chrom"].first())
     print(f"On {chrom}...", file=sys.stderr)
     for chrom, st, end in df_lcr.iter_rows():
-        # 0-based to 1-based (pyfaidx) for fetching.
-        st, end = int(st) + 1, int(end)
+        st, end = int(st), int(end)
         seq = fh_fai.fetch(chrom, st, end)
         nts = set(str(seq))
-        # print(chrom, st, end, seq)
+        # print(chrom, st, end, seq, file=sys.stderr)
         is_homopolymer = len(nts) == 1
         if not is_homopolymer:
             continue
-        nt = next(iter(nts))
-        # Revert back to longdust coordinates 0-based.
-        itree.add(it.Interval(st - 1, end, nt))
+        nt = next(iter(nts)).upper()
+
+        itree.add(it.Interval(st, end, nt))
     print(f"Done with {chrom}...", file=sys.stderr)
     return chrom, itree
 
@@ -267,7 +266,7 @@ def main():  #
         dfs_bed_lcr = df_bed_lcr.partition_by(["chrom"])
 
         homopolymers: defaultdict[str, it.IntervalTree] = defaultdict()
-        with ProcessPoolExecutor(max_tasks_per_child=1, max_workers=12) as pool:
+        with ProcessPoolExecutor(max_tasks_per_child=1, max_workers=8) as pool:
             futures: list[Future] = []
             for df in dfs_bed_lcr:
                 futures.append(pool.submit(process_one, reference, df))
@@ -303,7 +302,7 @@ def main():  #
     # Multi-histogram colored by nucleotide
     homopolymer_bins = defaultdict(Counter)
 
-    fh_fai = pyfaidx.Faidx(args.reference) if args.reference else None
+    fh_fai = pysam.FastaFile(args.reference) if args.reference else None
 
     for line in df_nucflag_homopolymer_calls.iter_rows(named=True):
         chrom, st, end = line["#chrom"], line["chromStart"], line["chromEnd"]
@@ -320,8 +319,12 @@ def main():  #
         if not ovl:
             len_homopolymer = 0
             if fh_fai:
-                rec = fh_fai.fetch(chrom, st + 1, end)
-                nt_homopolymer = rec.seq[0]
+                try:
+                    seq = fh_fai.fetch(chrom, st, end)
+                    nt_homopolymer = seq[0]
+                except (IndexError, ValueError):
+                    print(f"Skipped {chrom}:{st}-{end}", file=sys.stderr)
+                    continue
             else:
                 nt_homopolymer = "N"
             if args.outfile_incorrect:
@@ -331,7 +334,7 @@ def main():  #
             len_homopolymer = itv_homopolymer.length()
             nt_homopolymer = itv_homopolymer.data
 
-        homopolymer_bins[nt_homopolymer][len_homopolymer] += 1
+        homopolymer_bins[nt_homopolymer.upper()][len_homopolymer] += 1
 
     if args.outfile_bin:
         with open(args.outfile_bin, "wt") as fh:

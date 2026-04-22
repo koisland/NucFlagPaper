@@ -7,12 +7,24 @@ import matplotlib.patheffects as pe
 from matplotlib.axes import Axes
 from matplotlib.patches import Patch
 
+plt.rcParams["font.family"] = "Arial"
+
 CHROMS = [f"chr{i}" for i in range(1, 23)] + ["chrXY"]
 CALL_COLOR_KEY = {
     "truth": "black",
-    "false_positive": "gray",
+    "false_positive": "#ADD8E6",
     "true_positive": "blue",
     "false_negative": "red",
+}
+BANDCOL = {
+    "gneg": (0.95, 0.95, 0.95),
+    "gpos25": (0.7, 0.7, 0.7),
+    "gpos50": (0.5, 0.5, 0.5),
+    "gpos75": (0.3, 0.3, 0.3),
+    "gpos100": (0.1, 0.1, 0.1),
+    "acen": (1, 0.38, 0.36),
+    "gvar": (0.6, 0.6, 0.8),
+    "stalk": (0.45, 0.4, 0.8),
 }
 CALL_NAMES = {
     "truth": "Truth",
@@ -207,6 +219,7 @@ def main():
             ax_chrom_stats: Axes = axes[ax_row_idx_chrom, ax_col_idx_stats]
             ax_chrom_spacer: Axes = axes[ax_row_idx_chrom, ax_col_idx_spacer]
 
+            ax_chrom.set_rasterized(True)
             ax_chrom.xaxis.set_tick_params(which="both", length=0, labelleft=False)
             ax_chrom.yaxis.set_tick_params(which="both", length=0)
             # pyideogram removes xyticks
@@ -273,7 +286,7 @@ def main():
         )
         ax_legend.legend(
             handles=[
-                Patch(facecolor=color, label=CALL_NAMES[lbl])
+                Patch(facecolor=color, edgecolor="black", label=CALL_NAMES[lbl])
                 for lbl, color in color_key.items()
                 if lbl != "truth"
             ],

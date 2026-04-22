@@ -1,6 +1,3 @@
-VG_SAMPLES = ["CHM13v2.0", *config["samples"].keys()]
-
-
 """
 Rename the assemblies. We have two verkko versions so need a prefix.
 """
@@ -69,7 +66,7 @@ checkpoint merge_beds:
     input:
         beds=expand(
             rules.generate_filtered_calls.output,
-            sm=VG_SAMPLES,
+            sm=ASM_COLORS.keys(),
         ),
     output:
         calls_merged=join(OUTPUT_DIR, "vg", "filtered_calls_merged.bed"),
@@ -87,7 +84,7 @@ checkpoint merge_beds:
 
 ASM_VAR_GRAPH_CONFIG = {
     "assemblies": [
-        expand(rules.rename_assemblies.output.asm, sm=sm) for sm in VG_SAMPLES
+        expand(rules.rename_assemblies.output.asm, sm=sm) for sm in ASM_COLORS.keys()
     ],
     "regions": rules.merge_beds.output.calls_merged,
     "output_dir": join(OUTPUT_DIR, "vg"),
@@ -176,14 +173,15 @@ rule plot_heatmap_chm13_impg:
         bed=rules.query_chm13_impg.output,
         calls=expand(
             rules.nf_denovo_check_asm_nucflag.output.misassemblies,
-            sm=[f"{sm}_hifi" for sm in VG_SAMPLES],
+            sm=[f"{sm}_hifi" for sm in ASM_COLORS.keys()],
         ),
         annots=[
             rules.download_annotations.output.censat,
             rules.download_annotations.output.segdups,
         ],
         fais=[
-            expand(rules.rename_assemblies.output.asm_fai, sm=sm) for sm in VG_SAMPLES
+            expand(rules.rename_assemblies.output.asm_fai, sm=sm)
+            for sm in ASM_COLORS.keys()
         ],
     output:
         plot_dir=directory(join(OUTPUT_DIR, "vg", "plot_ava_asm_liftover_chm13")),
@@ -196,8 +194,8 @@ rule plot_heatmap_chm13_impg:
             ]
         ),
         annot_labels=["'Satellite structure'", "'Segmental duplications'"],
-        labels=" ".join([REF_SM, *config["samples"].keys()]),
-        colors=" ".join(["red", *[ASM_COLORS[sm] for sm in config["samples"].keys()]]),
+        labels=" ".join(ASM_COLORS.keys()),
+        colors=" ".join(ASM_COLORS.values()),
     shell:
         """
         python {params.script} \
@@ -216,5 +214,5 @@ use rule all from VariantGraph as vg_all with:
     input:
         rules.vg_all.input,
         rules.plot_heatmap_chm13_impg.output,
-        expand(rules.intersect_bubbles_w_calls.output, sm=VG_SAMPLES),
+        expand(rules.intersect_bubbles_w_calls.output, sm=ASM_COLORS.keys()),
     default_target: True

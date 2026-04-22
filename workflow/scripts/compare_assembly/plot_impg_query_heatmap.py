@@ -37,6 +37,8 @@ LEGEND_KWARGS = dict(
     frameon=False,
 )
 
+plt.rcParams["font.family"] = "Arial"
+
 
 def minimalize_ax(ax: Axes, *, remove_ticks: bool = False) -> None:
     for spine in ["left", "right", "bottom", "top"]:
@@ -55,7 +57,7 @@ def minimalize_ax(ax: Axes, *, remove_ticks: bool = False) -> None:
         )
 
 
-def draw_perc_ovl_legend(obj: Axes | plt.Figure):
+def draw_perc_ovl_legend(obj: plt.Figure):
     # Draw perc overlap
     legend_handles_perc_calls = {}
     increment = 10
@@ -64,17 +66,22 @@ def draw_perc_ovl_legend(obj: Axes | plt.Figure):
         legend_handles_perc_calls[f"{brkpt}%"] = Patch(
             edgecolor="black", facecolor=color
         )
-
+    labels = [*legend_handles_perc_calls.keys(), "No overlap", "Contig break"]
+    handles = [
+        *legend_handles_perc_calls.values(),
+        Patch(edgecolor="black", facecolor=NO_OVL_COLOR),
+        Patch(edgecolor="black", facecolor=CTG_BRK_COLOR),
+    ]
     obj.legend(
-        labels=[*legend_handles_perc_calls.keys(), "No overlap", "Contig break"],
-        handles=[
-            *legend_handles_perc_calls.values(),
-            Patch(edgecolor="black", facecolor=NO_OVL_COLOR),
-            Patch(edgecolor="black", facecolor=CTG_BRK_COLOR),
-        ],
+        labels=labels,
+        handles=handles,
+        title_fontsize=18,
+        fontsize=16,
+        ncols=len(labels),
         title="Percent NucFlag call overlap",
-        loc="center left",
-        bbox_to_anchor=(1.0, 0.5),
+        loc="center",
+        alignment="left",
+        bbox_to_anchor=(0.5, -0.1),
         **LEGEND_KWARGS,
     )
 
@@ -127,6 +134,8 @@ def main():
         ctg_lengths[label] = dict(df_fais.iter_rows())
         label_colors[label] = color
         for row in df_calls.iter_rows(named=True):
+            if row["st"] == row["end"]:
+                continue
             itrees_calls[f"{label}_{row['chrom']}"].add(
                 it.Interval(row["st"], row["end"], row["name"])
             )
@@ -189,7 +198,7 @@ def main():
             ncols=1,
             sharex=True,
             layout="constrained",
-            figsize=(16, 6),
+            figsize=(16, 4),
         )
 
         # Draw annotations
@@ -198,8 +207,9 @@ def main():
             if not annots:
                 continue
             ax_annot: Axes = axes[i]
+            ax_annot.tick_params(axis="both", which="major", labelsize=16)
             minimalize_ax(ax_annot, remove_ticks=True)
-            ax_annot.set_ylabel(lbl, rotation=0, ha="right")
+            ax_annot.set_ylabel(lbl, rotation=0, ha="right", fontsize=18)
             for annot in annots:
                 ax_annot.axvspan(
                     annot.begin, annot.end, color=annot.data[1], label=annot.data[0]
@@ -207,10 +217,11 @@ def main():
 
         for lbl, idx in label_order.items():
             ax: Axes = axes[idx]
+            ax.tick_params(axis="both", which="major", labelsize=16)
             lbl_color = label_colors[lbl]
-            ax.set_ylabel(lbl, rotation=0, ha="right", color=lbl_color)
+            ax.set_ylabel(lbl, rotation=0, ha="right", color=lbl_color, fontsize=18)
             if idx == len(axes) - 1:
-                ax.set_xlabel("Position (Mbp)")
+                ax.set_xlabel("Position (Mbp)", fontsize=18)
             ax.margins(x=0)
             ax.set_yticks([], [])
             for spine in ("top", "right"):
@@ -310,12 +321,16 @@ def main():
     for rchrom, (fig, axes) in figs.items():
         for ax in axes:
             ax.xaxis.set_major_formatter(formatter=lambda x, _: f"{x / 1_000_000:.1f}")
-
-        draw_perc_ovl_legend(fig)
         fig.savefig(
             os.path.join(args.output_dir, f"{rchrom}.png"), bbox_inches="tight", dpi=300
         )
         plt.close(fig)
+
+    fig_legend = plt.figure()
+    draw_perc_ovl_legend(fig_legend)
+    fig_legend.savefig(
+        os.path.join(args.output_dir, "legend.png"), bbox_inches="tight", dpi=300
+    )
 
 
 if __name__ == "__main__":

@@ -2,17 +2,21 @@
 
 rule draw_ng50:
     input:
-        asm=[get_assembly(sm) + ".fai" for sm in config["samples"].keys()],
-        ref=rules.download_chm13.output.fai,
+        fai=[get_assembly(sm) + ".fai" for sm in ASM_COLORS.keys()],
     output:
-        plot=join(OUTPUT_DIR, "ng50", "plot_ng50.png"),
+        plot=multiext(join(OUTPUT_DIR, "ng50", "plot_ng50"), ".png", ".pdf"),
     params:
         script="workflow/scripts/compare_assembly/generate_ng50.py",
-        labels=" ".join(config["samples"].keys()),
-        colors=" ".join(ASM_COLORS.get(sm, "None") for sm in config["samples"].keys()),
+        fai=lambda wc, input: " ".join(
+            f"<(grep -v chrY {file})" if "chm13v2.0" in file else file
+            for file in input.fai
+        ),
+        labels=" ".join(ASM_COLORS.keys()),
+        colors=" ".join(ASM_COLORS.values()),
+        output_prefix=lambda wc, output: splitext(output[0])[0],
     conda:
         "../../envs/curated.yaml"
     shell:
         """
-        python {params.script} -i {input.asm} <(grep -v chrY {input.ref}) -l {params.labels} CHM13v2.0 -c {params.colors} red -o {output.plot}
+        python {params.script} -i {params.fai} -l {params.labels} -c {params.colors} -o {params.output_prefix}
         """

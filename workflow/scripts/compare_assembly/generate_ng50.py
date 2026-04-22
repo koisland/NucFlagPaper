@@ -1,3 +1,4 @@
+from matplotlib.axes import Axes
 import argparse
 import sys
 import polars as pl
@@ -7,6 +8,9 @@ import matplotlib.patheffects as pe
 from collections import deque
 from itertools import islice
 from bisect import bisect
+
+
+plt.rcParams["font.family"] = "Arial"
 
 
 # https://docs.python.org/3/library/itertools.html
@@ -26,10 +30,11 @@ def main():
     ap.add_argument("-i", "--input_fai", type=str, nargs="+")
     ap.add_argument("-l", "--labels", type=str, nargs="+")
     ap.add_argument("-c", "--colors", type=str, nargs="+")
-    ap.add_argument("-o", "--output", type=str, default="out.png")
+    ap.add_argument("-o", "--output_prefix", type=str, default="out")
     args = ap.parse_args()
 
     fig, ax = plt.subplots(figsize=(8, 8), layout="constrained")
+    ax: Axes
     max_y = 0
     for label, file, color in zip(
         args.labels, args.input_fai, args.colors, strict=True
@@ -83,6 +88,7 @@ def main():
             f"NG50: {y_ng50:.1f} Mbp",
             (x_ng50_cov, y_ng50),
             color=color,
+            fontsize=18,
             path_effects=[pe.withStroke(linewidth=4.0, foreground="white")],
         )
         # ax.axhline(y=y_ng50, linestyle="dotted", color=color)
@@ -101,10 +107,13 @@ def main():
         loc="upper right",
         fancybox=False,
         frameon=False,
+        fontsize=18,
     )
-    ax.set_xlabel(r"% of genome")
-    ax.set_ylabel("Contig length (Mbp)")
-    fig.savefig(args.output, bbox_inches="tight", dpi=600)
+    ax.set_xlabel(r"% of genome", fontsize=18)
+    ax.set_ylabel("Contig length (Mbp)", fontsize=18)
+    ax.tick_params(axis="both", which="major", labelsize=18)
+    fig.savefig(f"{args.output_prefix}.png", bbox_inches="tight", dpi=600)
+    fig.savefig(f"{args.output_prefix}.pdf", bbox_inches="tight", dpi=600)
 
 
 if __name__ == "__main__":

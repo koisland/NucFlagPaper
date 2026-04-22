@@ -33,10 +33,10 @@ ELEMENT = {
 }
 CHROMS = ["chrY_PATERNAL", "chr21_PATERNAL", "chr4_PATERNAL", "all"]
 TOOLS = {
-    "flagger": "HMM-Flagger v1.1.0",
     "inspector": "Inspector v1.3",
-    "nucflag": "NucFlag v1.0.0",
+    "flagger": "HMM-Flagger v1.1.0",
     "deepvariant": "DeepVariant v1.9.0",
+    "nucflag": "NucFlag v1.0.0",
 }
 TOOL_COLORS = {
     "nucflag": "purple",

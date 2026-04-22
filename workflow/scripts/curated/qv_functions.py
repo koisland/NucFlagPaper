@@ -4,6 +4,8 @@ import matplotlib.pyplot as plt
 from math import log10, e
 from matplotlib.axes import Axes
 
+plt.rcParams["font.family"] = "Arial"
+
 
 # Merqury's QV metric.
 # https://github.com/marbl/merqury/blob/1ad7c328a0098ba7a5edb85a5f6a18fe62869e46/eval/qv.sh#L82
@@ -31,7 +33,7 @@ def qv_to_bp_err(qv: float, bp_total: int) -> int:
 
 
 def main():
-    output = sys.argv[1]
+    output_prefix = sys.argv[1]
 
     """
     +----------------------------+
@@ -53,7 +55,9 @@ def main():
         (asm_kmers, abs(qv_merqury(asm_kmers, total_kmers, kmer_size)))
         for asm_kmers in kmers_sizes
     ]
-    fig, axes = plt.subplots(nrows=1, ncols=2, sharey=True, layout="constrained")
+    fig, axes = plt.subplots(
+        nrows=1, ncols=2, sharey=True, layout="constrained", figsize=(12, 4)
+    )
     fig: plt.Figure
     ax: Axes
     axes_info = [
@@ -79,7 +83,8 @@ def main():
             ax.spines[spine].set_visible(False)
 
     fig.supylabel("QV")
-    fig.savefig(output)
+    fig.savefig(f"{output_prefix}.pdf", bbox_inches="tight", dpi=300)
+    fig.savefig(f"{output_prefix}.png", bbox_inches="tight", dpi=300)
 
 
 if __name__ == "__main__":

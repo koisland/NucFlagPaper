@@ -7,11 +7,23 @@ import matplotlib.pyplot as plt
 from matplotlib.axes import Axes
 from matplotlib.colors import rgb2hex
 
+plt.rcParams["font.family"] = "Arial"
+
 CALL_COLOR_KEY = {
     "truth": "black",
-    "false_positive": "gray",
+    "false_positive": "#ADD8E6",
     "true_positive": "blue",
     "false_negative": "red",
+}
+BANDCOL = {
+    "gneg": (0.95, 0.95, 0.95),
+    "gpos25": (0.7, 0.7, 0.7),
+    "gpos50": (0.5, 0.5, 0.5),
+    "gpos75": (0.3, 0.3, 0.3),
+    "gpos100": (0.1, 0.1, 0.1),
+    "acen": (1, 0.38, 0.36),
+    "gvar": (0.6, 0.6, 0.8),
+    "stalk": (0.45, 0.4, 0.8),
 }
 CALL_NAMES = {
     "truth": "Truth",
@@ -107,7 +119,7 @@ def main():
     ap.add_argument("--deepvariant")
     ap.add_argument("--segdups")
     ap.add_argument("--censat")
-    ap.add_argument("-o", "--outfile", default="out.png", help="Output file.")
+    ap.add_argument("-o", "--output_prefix", default="out", help="Output file.")
     ap.add_argument(
         "-f", "--fp", action="store_true", help='Include "false-positives".'
     )
@@ -219,11 +231,24 @@ def main():
     )
 
     color_key = CALL_COLOR_KEY
-    height_ratios = [0.25, 0.25, 0.5, 0.25, 0.25, 0.25, 0.25, 0.25, 0.5, 0.5, 0.5]  #
+    height_ratios = [
+        0.25,
+        0.25,
+        0.5,
+        0.25,
+        0.25,
+        0.25,
+        0.25,
+        0.25,
+        0.5,
+        0.5,
+        0.5,
+        0.5,
+    ]  #
     fig, axes = plt.subplots(
         ncols=1,
         nrows=len(height_ratios),
-        figsize=(20, 4),
+        figsize=(6, 4),
         height_ratios=height_ratios,
         sharex=True,
     )
@@ -234,8 +259,10 @@ def main():
     idx_chrom = 2
     idx_censat_legend = 8  #
     idx_segdup_legend = 9  #
-    idx_legend = 10  #
+    idx_bands_legend = 10  #
+    idx_legend = 11  #
     ax: Axes = axes[idx_chrom]
+    ax.set_rasterized(True)
 
     ax.xaxis.set_tick_params(which="both", length=0, labelleft=False)
     ax.yaxis.set_tick_params(which="both", length=0)
@@ -284,24 +311,35 @@ def main():
     for ax_ref, i in (
         (ax_censat, idx_censat_legend),
         (ax_segdup, idx_segdup_legend),
+        (None, idx_bands_legend),
         (None, idx_legend),
     ):
         if ax_ref:
             handles, labels = ax_ref.get_legend_handles_labels()
             labels_handles = dict(zip(labels, handles))
-        else:
             labels_handles = {
-                CALL_NAMES[call]: Patch(color=color)
-                for call, color in CALL_COLOR_KEY.items()
-                if call != "truth"
+                lbl: Patch(facecolor=h.get_facecolor(), edgecolor="black")
+                for lbl, h in labels_handles.items()
             }
+        else:
+            if i == idx_legend:
+                labels_handles = {
+                    CALL_NAMES[call]: Patch(facecolor=color, edgecolor="black")
+                    for call, color in CALL_COLOR_KEY.items()
+                    if call != "truth"
+                }
+            else:
+                labels_handles = {
+                    call: Patch(facecolor=color, edgecolor="black")
+                    for call, color in BANDCOL.items()
+                }
 
         ax_legend: Axes = axes[i]
         minimize_ax(ax_legend, remove_ticks=True)
 
         if i == idx_segdup_legend:
             labels_handles = {
-                categ: Patch(color=SEGDUP_COLORS[categ])
+                categ: Patch(facecolor=SEGDUP_COLORS[categ], edgecolor="black")
                 for categ in SEGDUP_COLORS.keys()
             }
 
@@ -317,7 +355,8 @@ def main():
             handleheight=0.7,
         )
 
-    fig.savefig(args.outfile, bbox_inches="tight", dpi=600)
+    fig.savefig(f"{args.output_prefix}.pdf", bbox_inches="tight", dpi=600)
+    fig.savefig(f"{args.output_prefix}.png", bbox_inches="tight", dpi=600)
 
 
 if __name__ == "__main__":

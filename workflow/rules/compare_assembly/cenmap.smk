@@ -32,21 +32,6 @@ rule run_cenmap:
         """
 
 
-rule generate_simple_cytobands:
-    input:
-        rules.run_cenmap.output,
-    output:
-        join(OUTPUT_DIR, "cenmap", "{sm}_cytobands.bed"),
-    shell:
-        """
-        # For each centromere, split at midpt into two annotations.
-        awk -v OFS="\\t" '{{
-
-            print $1, $2, $3, "acen"
-        }}' {input}
-        """
-
-
 rule cenmap_all:
     input:
         expand(rules.run_cenmap.output, sm=config["samples"].keys()),

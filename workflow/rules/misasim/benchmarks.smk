@@ -106,21 +106,23 @@ rule plot_stats_f1_all:
         ],
     output:
         tsv=join(SUMMARY_OUTPUT_DIR, "{sm}_summary_stats.tsv"),
-        plot=join(SUMMARY_OUTPUT_DIR, "{sm}_summary_stats.png"),
+        png=join(SUMMARY_OUTPUT_DIR, "{sm}_summary_stats.png"),
+        pdf=join(SUMMARY_OUTPUT_DIR, "{sm}_summary_stats.pdf"),
     conda:
         "../../envs/tools.yaml"
     params:
         script="workflow/scripts/metrics/plot_summary_stats.py",
         colors=" ".join(TOOL_COLORS.values()),
         labels=" ".join(f"'{lbl}'" for lbl in TOOLS.values()),
+        output_prefix=lambda wc, output: splitext(output.tsv)[0],
     shell:
         """
         python {params.script} \
         -i {input.summaries} \
         -l {params.labels} \
         -c {params.colors} \
-        -o {output.plot} \
-        -s "(8, 8)" > {output.tsv}
+        -o {params.output_prefix} \
+        -s "(6, 4)" > {output.tsv}
         """
 
 

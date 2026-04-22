@@ -48,7 +48,8 @@ rule plot_call_venn:
             rules.versioned_filter_vcf_calls.output, sm="HG002_{version}"
         )[0],
     output:
-        plot=join(OUTPUT_DIR, "call_ovl", "{version}_venn.png"),
+        png=join(OUTPUT_DIR, "call_ovl", "{version}_venn.png"),
+        pdf=join(OUTPUT_DIR, "call_ovl", "{version}_venn.pdf"),
     params:
         script="workflow/scripts/curated/call_venn_diagram.py",
         output_prefix=lambda wc, output: join(dirname(output[0]), wc.version),
@@ -74,7 +75,8 @@ rule plot_stats_f1_all:
         ],
     output:
         tsv=join(OUTPUT_DIR, "summary", "all_summary_stats.tsv"),
-        plot=join(OUTPUT_DIR, "summary", "all_summary_stats.png"),
+        png=join(OUTPUT_DIR, "summary", "all_summary_stats.png"),
+        pdf=join(OUTPUT_DIR, "summary", "all_summary_stats.pdf"),
     conda:
         "../../envs/tools.yaml"
     params:
@@ -87,13 +89,14 @@ rule plot_stats_f1_all:
             for tool in TOOLS.keys()
             for version in ASSEMBLIES.keys()
         ),
+        output_prefix=lambda wc, output: splitext(output.tsv)[0],
     shell:
         """
         python {params.script} \
         -i {input.summaries} \
         -l {params.labels} \
         -c {params.colors} \
-        -o {output.plot} > {output.tsv}
+        -o {params.output_prefix} > {output.tsv}
         """
 
 

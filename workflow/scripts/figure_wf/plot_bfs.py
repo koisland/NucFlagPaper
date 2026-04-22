@@ -240,7 +240,8 @@ def main():
             continue
         print(start, end)
 
-    fig.savefig("bfs.png")
+    fig.savefig("bfs.png", dpi=300)
+    fig.savefig("bfs.pdf", dpi=300)
 
 
 if __name__ == "__main__":
