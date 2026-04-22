@@ -256,7 +256,7 @@ flagger_config_base["samples"].extend(
 
 module Flagger:
     snakefile:
-        "../flagger.smk"
+        "../utils/flagger.smk"
     config:
         flagger_config_base
 
@@ -331,7 +331,7 @@ inspector_config_base["samples"].extend(
 
 module Inspector:
     snakefile:
-        "../inspector.smk"
+        "../utils/inspector.smk"
     config:
         inspector_config_base
 

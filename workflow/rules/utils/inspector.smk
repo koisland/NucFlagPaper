@@ -41,7 +41,7 @@ rule run_inspector:
         mem=MEM,
     threads: THREADS
     conda:
-        "../envs/inspector.yaml"
+        "../../envs/inspector.yaml"
     shell:
         """
         # https://github.com/Maggi-Chen/Inspector/issues/10

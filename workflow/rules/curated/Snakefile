@@ -181,7 +181,7 @@ deepvariant_config = {
 
 module Inspector:
     snakefile:
-        "../inspector.smk"
+        "../utils/inspector.smk"
     config:
         inspector_config
 
@@ -191,7 +191,7 @@ use rule * from Inspector as versioned_*
 
 module Flagger:
     snakefile:
-        "../flagger.smk"
+        "../utils/flagger.smk"
     config:
         flagger_config
 
@@ -201,7 +201,7 @@ use rule * from Flagger as versioned_*
 
 module DeepVariant:
     snakefile:
-        "../deepvariant.smk"
+        "../utils/deepvariant.smk"
     config:
         deepvariant_config
 
