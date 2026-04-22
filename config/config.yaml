@@ -1,8 +1,8 @@
-data_manifest: "config/manifest.tsv"
 data_dir: "data"
 output_dir: "results"
 logs_dir: "logs"
 benchmarks_dir: "benchmarks"
+# TODO: Move to appropriate config block.
 config:
   hifi: "config/nucflag_hifi.toml"
   flagger_hifi: "workflow/scripts/flagger/misc/alpha_tsv/HiFi_DC_1.2/alpha_optimum_trunc_exp_gaussian_w_16000_n_50.HiFi_DC_1.2_DEC_2024.v1.1.0.tsv"
@@ -10,14 +10,16 @@ config:
   flagger_ont_r10: "workflow/scripts/flagger/misc/alpha_tsv/ONT_R1041_Dorado/alpha_optimum_trunc_exp_gaussian_w_8000_n_50.ONT_R1041_Dorado_DEC_2024.v1.1.0.tsv"
   element_curated: "config/nucflag_element_curated.toml"
   hifi_curated: "config/nucflag_hifi_curated.toml"
-group_by:
-  HG002: "^(.*?)_(.*?)$"
+simulate:
+  manifest: "data/HG002/manifest.tsv"
+  group_by:
+    HG002: "^(.*?)_(.*?)$"
 assembly_config:
   manifest: "config/config_assembly.yaml"
   nucflag_hifi: "config/nucflag_hifi_chm13.toml"
   nucflag_ont: "config/nucflag_ont_chm13.toml"
 hprc:
-  manifest: "config/hprc_all_manifest.csv"
+  manifest: "data/compare_hprc/hprc_all_manifest.csv"
 nonhuman:
   bed_centromeres:
     Col-CEN: data/nonhuman/Col-CEN_centromeres.bed

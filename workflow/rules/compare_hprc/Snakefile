@@ -101,7 +101,7 @@ rule calculate_qv:
         "../Snakemake-NucFlag/workflow/env/nucflag.yaml"
     shell:
         """
-        nucflag qv -i {input.calls} -c scaffold > {output.qv}
+        nucflag qv -i {input.calls} > {output.qv}
         """
 
 
