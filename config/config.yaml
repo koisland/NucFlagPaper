@@ -20,6 +20,9 @@ assembly_config:
   nucflag_ont: "config/nucflag_ont_chm13.toml"
 hprc:
   manifest: "data/compare_hprc/hprc_all_manifest.csv"
+  annotations_segdups:
+    R1: data/compare_hprc/Year1_assemblies_v2_genbank_Seg_Dups.index.gz
+    R2: data/compare_hprc/segdups_hprc_r2_v1.1.index.csv.gz
 nonhuman:
   bed_centromeres:
     Col-CEN: data/nonhuman/Col-CEN_centromeres.bed

@@ -1,3 +1,4 @@
+import polars as pl
 from os.path import join
 from collections import defaultdict
 
@@ -197,6 +198,9 @@ rule plot_ul_ont:
         """
 
 
+include: "smn.smk"
+
+
 rule all:
     input:
         expand(rules.download_assemblies.output, sm=DATA.keys(), release=RELEASES),
@@ -208,5 +212,6 @@ rule all:
         ),
         rules.plot_qv_comparison.output,
         rules.plot_err_comparison.output,
+        rules.smn_all.input,
         rules.plot_ul_ont.output,
     default_target: True

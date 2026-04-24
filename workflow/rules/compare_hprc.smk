@@ -7,6 +7,10 @@ module CompareHPRCReleases:
             "logs_dir": join(config["logs_dir"], "hprc"),
             "benchmarks_dir": join(config["benchmarks_dir"], "hprc"),
             "manifest": config["hprc"]["manifest"],
+            "annotations_segdups": {
+                "R1": config["hprc"]["annotations_segdups"]["R1"],
+                "R2": config["hprc"]["annotations_segdups"]["R2"],
+            },
         }
 
 
