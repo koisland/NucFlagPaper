@@ -25,3 +25,7 @@
     * https://github.com/human-pangenomics/HPP_Year1_Assemblies/blob/main/annotation_index/Year1_assemblies_v2_genbank_Seg_Dups.index
 * `Year1_assemblies_v2_genbank_Seg_Dups.index.gz`
     * https://github.com/human-pangenomics/hprc_intermediate_assembly/blob/main/data_tables/annotation/segdups/segdups_hprc_r2_v1.1.index.csv
+
+# Population labels
+* `hprc_metadata.tsv`
+    * From https://data.humanpangenome.org/raw-sequencing-data

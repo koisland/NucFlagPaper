@@ -20,6 +20,8 @@ df_all_segdups = pl.concat([df_r1_segdups, df_r2_segdups])
 
 # From other part of workflow
 ASM_CHM13 = join(OUTPUT_DIR, "..", "assembly", "reference", "chm13v2.0.fa.gz")
+BED_CHM13_SMN = (join("data", "compare_hprc", "chm13v2.0_smn_1mbp_slop.bed"),)
+SM_METADATA = (join("data", "compare_hprc", "hprc_metadata.tsv"),)
 
 
 def get_sms_release(*releases: str) -> Iterator[str]:
@@ -76,15 +78,33 @@ rule query_w_impg_sm_to_chm13_paf:
         paf=lambda wc: expand(
             rules.asm_ref_hprc_r1_r2_bam_to_paf.output, ref=wc.ref, sm=wc.sm_release
         ),
-        bed=join("data", "compare_hprc", "chm13v2.0_smn_1mbp_slop.bed"),
+        bed=BED_CHM13_SMN,
     output:
         join(OUTPUT_DIR, "smn", "{ref}", "{sm_release}.bed"),
     conda:
         "../compare_assembly/Snakemake-asm-evaluation-vg/workflow/envs/tools.yaml"
     shell:
         """
-        impg query -p {input.paf} -b {input.bed} > {output}
+        impg query -p {input.paf} -b {input.bed} | \
+        sort -k 1,1 -k2,2n | \
+        bedtools merge -d 1000000 -i - -c 4,5,6,7,8,9,10 -o first,min,max,first,first,first,first > {output}
         """
+
+
+include: "liftover_r1_r2.smk"
+
+
+ruleorder: liftover_annotations_r1_to_r2 > download_segdup_annot
+
+
+def get_segdup_annot(wc):
+    sm, release = wc.sm_release.split("_", 1)
+    # Cannot use segdup annotations from HPRC R1 because incomplete/incorrect.
+    # Attempt to liftover from R2
+    if release == "R2":
+        return expand(rules.download_segdup_annot.output, sm=sm, release=release)
+    else:
+        return expand(rules.liftover_annotations_r1_to_r2.output.segdups, sm=sm)
 
 
 rule intersect_sedef_nucflag:
@@ -92,11 +112,7 @@ rule intersect_sedef_nucflag:
         # Liftover of bed to new assembly coordinates
         bed=rules.query_w_impg_sm_to_chm13_paf.output,
         # Sedef annotations
-        sedef=lambda wc: expand(
-            rules.download_segdup_annot.output,
-            sm=wc.sm_release.split("_", 1)[0],
-            release=wc.sm_release.split("_", 1)[1],
-        ),
+        sedef=get_segdup_annot,
         # NucFlag output
         nucflag=lambda wc: expand(
             rules.run_nucflag.output,
@@ -113,7 +129,8 @@ rule intersect_sedef_nucflag:
     shell:
         """
         bedtools intersect -a {input.bed} -b {input.sedef} -wb > {output.sedef}
-        bedtools intersect -a {input.bed} -b {input.nucflag} -wb > {output.nucflag}
+        bedtools intersect -a {input.bed} -b {input.nucflag} -wb | \
+            bedtools intersect -a - -b <(bedtools groupby -i {output.sedef} -g 1 -c 2,3 -o min,max) > {output.nucflag}
         """
 
 
@@ -143,17 +160,31 @@ rule plot_r1_r2_chm13_coords:
             ref="CHM13v2.0",
             sm_release=list(get_sms_release("R2")),
         ),
+        r1_fai=expand(
+            join(OUTPUT_DIR, "data", "{sm_release}.fa.gz.fai"),
+            sm_release=get_sms_release("R1"),
+        ),
+        r2_fai=expand(
+            join(OUTPUT_DIR, "data", "{sm_release}.fa.gz.fai"),
+            sm_release=get_sms_release("R2"),
+        ),
+        sample_metadata=SM_METADATA,
     output:
         multiext(join(OUTPUT_DIR, "smn", "smn_locus_r1_r2"), ".png", ".pdf"),
     params:
         script="workflow/scripts/compare_hprc/cmp_smn_r1_r2.py",
+        output_prefix=lambda wc, output: splitext(output[0])[0],
     shell:
         """
         python {params.script} \
         --r1_sedef {input.r1_sedef} \
         --r2_sedef {input.r2_sedef} \
         --r1_nucflag {input.r1_nucflag} \
-        --r2_nucflag {input.r2_nucflag}
+        --r2_nucflag {input.r2_nucflag} \
+        --r1_fai {input.r1_fai} \
+        --r2_fai {input.r2_fai} \
+        --sm_metadata {input.sample_metadata} \
+        --output_prefix {params.output_prefix}
         """
 
 

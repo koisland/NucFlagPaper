@@ -19,6 +19,6 @@ dependencies:
   - bigtools
   - pip
   - pip:
-    - supervenn
+    - UpSetPlot
     - pyarrow
     - scikit_posthocs

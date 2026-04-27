@@ -1,16 +1,16 @@
+import sys
 import json
 import argparse
-import sys
-import matplotlib.colors
-
+import numpy as np
 import polars as pl
 import matplotlib.pyplot as plt
 
 from typing import TextIO
 from intervaltree import Interval, IntervalTree
+from matplotlib.axes import Axes
+from matplotlib.colors import to_rgba
 from collections import defaultdict, Counter
-from supervenn import supervenn, make_sets_from_chunk_sizes
-
+from upsetplot import UpSet, from_indicators
 
 RENAME_TOOLS = {
     "nucflag_no_homopolymers": "NucFlag v1.0 (No homopolymers)",
@@ -26,6 +26,25 @@ COLORS = dict(
         strict=True,
     )
 )
+
+plt.rcParams["font.family"] = "Arial"
+
+
+def minimalize_ax(ax: Axes, *, remove_ticks: bool = False) -> None:
+    for spine in ["left", "right", "bottom", "top"]:
+        ax.spines[spine].set_visible(False)
+    if remove_ticks:
+        ax.tick_params(
+            axis="both",
+            left=False,
+            top=False,
+            right=False,
+            bottom=False,
+            labelleft=False,
+            labeltop=False,
+            labelright=False,
+            labelbottom=False,
+        )
 
 
 def main():
@@ -126,23 +145,33 @@ def main():
             row[tool] = True
         # Rename
         row = {RENAME_TOOLS[tool]: value for tool, value in row.items()}
-        row["size"] = cnt
+        row["value"] = cnt
         rows_ovl_counts.append(row)
 
-    df_ovl_counts = pl.DataFrame(rows_ovl_counts, orient="row").to_pandas()
-    # Reorder.
-    df_ovl_counts = df_ovl_counts[[*COLORS.keys(), "size"]]
-    fig, ax = plt.subplots(figsize=(16, 4), dpi=600, layout="constrained")
-    sets, labels = make_sets_from_chunk_sizes(df_ovl_counts)
-    colors = [matplotlib.colors.to_rgba(COLORS[label], alpha=0.5) for label in labels]
-    supervenn(
-        sets,
-        labels,
-        ax=ax,
-        min_width_for_annotation=1200,
-        fontsize=16,
-        color_cycle=colors,
+    df_ovl_counts = (
+        pl.DataFrame(rows_ovl_counts, orient="row").to_pandas().fillna(value=np.nan)
     )
+    # Reorder.
+    df_ovl_counts = df_ovl_counts[[*COLORS.keys(), "value"]]
+
+    fig, ax = plt.subplots(figsize=(16, 4), dpi=600, layout="tight")
+    minimalize_ax(ax, remove_ticks=True)
+
+    df_ovl_counts = from_indicators(list(COLORS.keys()), data=df_ovl_counts)
+    upset = UpSet(
+        data=df_ovl_counts, show_counts=True, show_percentages=True, sum_over="value"
+    )
+    for lbl, color in COLORS.items():
+        upset.style_categories(
+            categories=[lbl],
+            bar_facecolor=color,
+            shading_facecolor=to_rgba(color, alpha=0.2),
+        )
+
+    # upset.add_stacked_bars(
+    #     by="Sex", colors=COLORS, title="Count by Tool",
+    # )
+    upset.plot(fig=fig)
     fig.savefig(f"{output_prefix}_venn.png", bbox_inches="tight")
     fig.savefig(f"{output_prefix}_venn.pdf", bbox_inches="tight")
 
