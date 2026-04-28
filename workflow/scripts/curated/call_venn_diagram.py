@@ -9,6 +9,7 @@ from typing import TextIO
 from intervaltree import Interval, IntervalTree
 from matplotlib.axes import Axes
 from matplotlib.colors import to_rgba
+from matplotlib.patches import Rectangle
 from collections import defaultdict, Counter
 from upsetplot import UpSet, from_indicators
 
@@ -138,7 +139,7 @@ def main():
     for fh in file_handles.values():
         fh.close()
 
-    rows_ovl_counts = []
+    rows_ovl_counts: list[dict[str, bool | int]] = []
     for ovl_name, cnt in ovl_counts.items():
         row = {tool: False for tool in calls.keys()}
         for tool in ovl_name.split("-"):
@@ -148,18 +149,24 @@ def main():
         row["value"] = cnt
         rows_ovl_counts.append(row)
 
-    df_ovl_counts = (
-        pl.DataFrame(rows_ovl_counts, orient="row").to_pandas().fillna(value=np.nan)
+    df_pl_ovl_counts = pl.DataFrame(rows_ovl_counts, orient="row").sort(
+        descending=True, by="value"
     )
     # Reorder.
-    df_ovl_counts = df_ovl_counts[[*COLORS.keys(), "value"]]
+    df_ovl_counts = df_pl_ovl_counts.to_pandas().fillna(value=np.nan)[
+        [*COLORS.keys(), "value"]
+    ]
 
     fig, ax = plt.subplots(figsize=(16, 4), dpi=600, layout="tight")
     minimalize_ax(ax, remove_ticks=True)
 
     df_ovl_counts = from_indicators(list(COLORS.keys()), data=df_ovl_counts)
     upset = UpSet(
-        data=df_ovl_counts, show_counts=True, show_percentages=True, sum_over="value"
+        data=df_ovl_counts,
+        show_counts=True,
+        sum_over="value",
+        sort_by="cardinality",
+        sort_categories_by="input",
     )
     for lbl, color in COLORS.items():
         upset.style_categories(
@@ -168,10 +175,45 @@ def main():
             shading_facecolor=to_rgba(color, alpha=0.2),
         )
 
-    # upset.add_stacked_bars(
-    #     by="Sex", colors=COLORS, title="Count by Tool",
-    # )
-    upset.plot(fig=fig)
+    subplots = upset.plot(fig=fig)
+
+    # Add stacked bar. We cannot use existing implementation because we don't have a grouping var.
+    ax_intersections: Axes = subplots["intersections"]
+    intersections = sorted(rows_ovl_counts, key=lambda x: x["value"], reverse=True)
+    x_coords = []
+    widths = []
+    heights = defaultdict(list)
+    for container in ax_intersections.containers:
+        for intersection, ptch in zip(intersections, container.patches):
+            ptch: Rectangle
+            x_coords.append(ptch.get_x())
+            widths.append(ptch.get_width())
+
+            intersection_size = sum(
+                1 for tool in COLORS.keys() if intersection.get(tool)
+            )
+            # Divide height by intersection size so even height prop
+            for tool in COLORS.keys():
+                heights[tool].append(
+                    ptch.get_height() / intersection_size
+                    if intersection.get(tool)
+                    else 0
+                )
+            ptch.remove()
+
+    bottom = np.zeros(len(intersections))
+    for tool, color in COLORS.items():
+        heights_tool = heights[tool]
+        ax_intersections.bar(
+            x=x_coords,
+            height=heights_tool,
+            width=widths,
+            bottom=bottom,
+            color=color,
+            align="edge",
+        )
+        bottom += heights_tool
+
     fig.savefig(f"{output_prefix}_venn.png", bbox_inches="tight")
     fig.savefig(f"{output_prefix}_venn.pdf", bbox_inches="tight")
 

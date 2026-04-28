@@ -1,6 +1,7 @@
 import polars as pl
-from os.path import join
+from os.path import join, splitext
 from collections import defaultdict
+from typing import Iterator
 
 
 OUTPUT_DIR = config["output_dir"]

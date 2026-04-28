@@ -1,23 +1,3 @@
-from typing import Iterator
-
-
-# SMN2 and SMN1 (1 Mbp slop)
-df_r1_segdups = pl.read_csv(config["annotations_segdups"]["R1"], separator="\t").select(
-    sample=pl.col("sample"),
-    haplotype=pl.col("haplotype"),
-    location=pl.col("file_location"),
-    release=pl.lit("R1"),
-)
-df_r2_segdups = pl.read_csv(config["annotations_segdups"]["R2"]).select(
-    sample=pl.col("sample_id"),
-    haplotype=pl.when(pl.col("haplotype") == 1)
-    .then(pl.lit("paternal"))
-    .otherwise(pl.lit("maternal")),
-    location=pl.col("location"),
-    release=pl.lit("R2"),
-)
-df_all_segdups = pl.concat([df_r1_segdups, df_r2_segdups])
-
 # From other part of workflow
 ASM_CHM13 = join(OUTPUT_DIR, "..", "assembly", "reference", "chm13v2.0.fa.gz")
 BED_CHM13_SMN = (join("data", "compare_hprc", "chm13v2.0_smn_1mbp_slop.bed"),)
@@ -54,25 +34,6 @@ module align_asm_to_ref_hprc_r1_2:
 use rule * from align_asm_to_ref_hprc_r1_2 as asm_ref_hprc_r1_r2_*
 
 
-rule download_segdup_annot:
-    output:
-        join(OUTPUT_DIR, "data", "{sm}_{release}_sedef.bed"),
-    params:
-        uris=lambda wc: df_all_segdups.filter(
-            pl.col("sample").eq(pl.lit(wc.sm))
-            & pl.col("release").eq(pl.lit(wc.release))
-        )["location"].to_list(),
-    conda:
-        # TODO: Consolidate envs
-        "../../envs/curated.yaml"
-    shell:
-        """
-        for uri in {params.uris}; do
-            aws s3 cp ${{uri}} - >> {output}
-        done
-        """
-
-
 rule query_w_impg_sm_to_chm13_paf:
     input:
         paf=lambda wc: expand(
@@ -91,28 +52,53 @@ rule query_w_impg_sm_to_chm13_paf:
         """
 
 
-include: "liftover_r1_r2.smk"
+# Subset lifted over region to just contig. Preserves coordinates but reduces runtime.
+rule subset_smn:
+    input:
+        asm=join(OUTPUT_DIR, "data", "{sm_release}.fa.gz"),
+        bed=rules.query_w_impg_sm_to_chm13_paf.output,
+    output:
+        fa=temp(join(OUTPUT_DIR, "smn", "{ref}", "{sm_release}.fa")),
+        fai=temp(join(OUTPUT_DIR, "smn", "{ref}", "{sm_release}.fa.fai")),
+    conda:
+        "../../envs/tools.yaml"
+    shell:
+        """
+        seqtk subseq {input.asm} <(cut -f1 {input.bed} | sort -u) > {output.fa}
+        samtools faidx {output.fa}
+        """
 
 
-ruleorder: liftover_annotations_r1_to_r2 > download_segdup_annot
+# use rhodonite
+config_rhodonite = {
+    "threads": 4,
+    "n_records": 2,
+    "outdir": join(OUTPUT_DIR, "rhodonite"),
+    "logdir": join(LOG_DIR, "rhodonite"),
+    "samples": {
+        f"{sm_release}": expand(
+            rules.subset_smn.output.fa, ref="CHM13v2.0", sm_release=sm_release
+        )[0]
+        for sm_release in get_sms_release(*RELEASES)
+    },
+}
 
 
-def get_segdup_annot(wc):
-    sm, release = wc.sm_release.split("_", 1)
-    # Cannot use segdup annotations from HPRC R1 because incomplete/incorrect.
-    # Attempt to liftover from R2
-    if release == "R2":
-        return expand(rules.download_segdup_annot.output, sm=sm, release=release)
-    else:
-        return expand(rules.liftover_annotations_r1_to_r2.output.segdups, sm=sm)
+module Rhodonite:
+    snakefile:
+        "Rhodonite/workflow/Snakefile"
+    config:
+        config_rhodonite
 
 
-rule intersect_sedef_nucflag:
+use rule * from Rhodonite as Rhodonite_*
+
+
+rule intersect_dupmasker_nucflag:
     input:
         # Liftover of bed to new assembly coordinates
         bed=rules.query_w_impg_sm_to_chm13_paf.output,
-        # Sedef annotations
-        sedef=get_segdup_annot,
+        dupmasker=expand(rules.Rhodonite_DupMasker.output.bed, sample="{sm_release}"),
         # NucFlag output
         nucflag=lambda wc: expand(
             rules.run_nucflag.output,
@@ -120,7 +106,9 @@ rule intersect_sedef_nucflag:
             release=wc.sm_release.split("_", 1)[1],
         ),
     output:
-        sedef=join(OUTPUT_DIR, "smn", "{ref}", "{sm_release}_sedef_intersection.bed"),
+        dupmasker=join(
+            OUTPUT_DIR, "smn", "{ref}", "{sm_release}_dupmasker_intersection.bed"
+        ),
         nucflag=join(
             OUTPUT_DIR, "smn", "{ref}", "{sm_release}_nucflag_intersection.bed"
         ),
@@ -128,9 +116,9 @@ rule intersect_sedef_nucflag:
         "../../envs/tools.yaml"
     shell:
         """
-        bedtools intersect -a {input.bed} -b {input.sedef} -wb > {output.sedef}
+        bedtools intersect -a {input.bed} -b {input.dupmasker} -wb > {output.dupmasker}
         bedtools intersect -a {input.bed} -b {input.nucflag} -wb | \
-            bedtools intersect -a - -b <(bedtools groupby -i {output.sedef} -g 1 -c 2,3 -o min,max) > {output.nucflag}
+            bedtools intersect -a - -b <(bedtools groupby -i {output.dupmasker} -g 1 -c 2,3 -o min,max) > {output.nucflag}
         """
 
 
@@ -140,23 +128,23 @@ rule intersect_sedef_nucflag:
 
 rule plot_r1_r2_chm13_coords:
     input:
-        r1_sedef=expand(
-            rules.intersect_sedef_nucflag.output.sedef,
+        r1_dupmasker=expand(
+            rules.intersect_dupmasker_nucflag.output.dupmasker,
             ref="CHM13v2.0",
             sm_release=list(get_sms_release("R1")),
         ),
         r1_nucflag=expand(
-            rules.intersect_sedef_nucflag.output.nucflag,
+            rules.intersect_dupmasker_nucflag.output.nucflag,
             ref="CHM13v2.0",
             sm_release=list(get_sms_release("R1")),
         ),
-        r2_sedef=expand(
-            rules.intersect_sedef_nucflag.output.sedef,
+        r2_dupmasker=expand(
+            rules.intersect_dupmasker_nucflag.output.dupmasker,
             ref="CHM13v2.0",
             sm_release=list(get_sms_release("R2")),
         ),
         r2_nucflag=expand(
-            rules.intersect_sedef_nucflag.output.nucflag,
+            rules.intersect_dupmasker_nucflag.output.nucflag,
             ref="CHM13v2.0",
             sm_release=list(get_sms_release("R2")),
         ),
@@ -177,8 +165,8 @@ rule plot_r1_r2_chm13_coords:
     shell:
         """
         python {params.script} \
-        --r1_sedef {input.r1_sedef} \
-        --r2_sedef {input.r2_sedef} \
+        --r1_dupmasker {input.r1_dupmasker} \
+        --r2_dupmasker {input.r2_dupmasker} \
         --r1_nucflag {input.r1_nucflag} \
         --r2_nucflag {input.r2_nucflag} \
         --r1_fai {input.r1_fai} \
@@ -192,8 +180,8 @@ rule smn_all:
     input:
         rules.asm_ref_hprc_r1_r2_all.input,
         expand(
-            rules.intersect_sedef_nucflag.output,
+            rules.intersect_dupmasker_nucflag.output,
             ref="CHM13v2.0",
             sm_release=list(get_sms_release(*RELEASES)),
         ),
-        rules.plot_r1_r2_chm13_coords.output,
+        # rules.plot_r1_r2_chm13_coords.output,
