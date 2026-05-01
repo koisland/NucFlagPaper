@@ -20,5 +20,5 @@ exp
 /*.xml
 
 wfmash*
-run.sh
+run*.sh
 RM_*

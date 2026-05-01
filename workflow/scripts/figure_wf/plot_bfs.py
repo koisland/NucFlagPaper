@@ -1,3 +1,4 @@
+import argparse
 import matplotlib.pyplot as plt
 from matplotlib.axes import Axes
 from typing import Generator
@@ -54,14 +55,23 @@ def arrow_inflexion(
 
 
 def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("-o", "--output_prefix", default="bfs", type=str)
+    ap.add_argument("--draw_arrows", action="store_true")
+    ap.add_argument("--draw_grid", action="store_true")
+    args = ap.parse_args()
+
+    draw_arrows = args.draw_arrows
+    draw_grid = args.draw_grid
+
     N_ROW_COL = 14
     fig, axes = plt.subplots(
         nrows=N_ROW_COL,
         ncols=N_ROW_COL,
         figsize=(N_ROW_COL, N_ROW_COL),
         squeeze=True,
-        layout="constrained",
     )
+    fig.subplots_adjust(hspace=0, wspace=0)
 
     # Identity diagonal
     coord_diag = set(zip(range(N_ROW_COL), range(N_ROW_COL)))
@@ -118,13 +128,16 @@ def main():
             #     ax.set_ylabel(ylabel, rotation=270, va="top")
 
             if (x, y) in coord_diag:
-                ax.set_facecolor("red")
+                ax.set_facecolor("#841C35")
             elif (x, y) in coords_grp_1 or (y, x) in coords_grp_1:
-                ax.set_facecolor("#f4ccccff")
+                ax.set_facecolor("#2974AF")
             elif (x, y) in coords_grp_2 or (y, x) in coords_grp_2:
-                ax.set_facecolor("#c9daf8ff")
-            elif (x, y) in coords_grps_similar or (y, x) in coords_grps_similar:
-                ax.set_facecolor("#D3D3D3")
+                ax.set_facecolor("#D7393A")
+
+            if draw_grid:
+                continue
+            for spine in ["left", "right", "top", "bottom"]:
+                ax.spines[spine].set_visible(False)
 
     traveled = set()
     window = 5000
@@ -181,54 +194,56 @@ def main():
             positions.appendleft(coord_next_right)
             idents.append(ident)
 
-            # Draw arrow.
-            # Coords reversed because want on top.
-            if (
-                ax
-                and coord_next_down in coords_traveled
-                and coord_next_right in coords_traveled
-            ):
-                arrow_inflexion(
-                    ax=ax,
-                    start=(2, 1),
-                    end=(1, 0),
-                    angleA=0,
-                    angleB=90,
-                    radius=0,
-                    arrow_style="<|-|>",
-                )
-            elif ax and coord_next_down in coords_traveled:
-                arrow_inflexion(
-                    ax=ax,
-                    start=(1, 1),
-                    end=(2, 1),
-                    angleA=0,
-                    angleB=90,
-                    radius=0,
-                    arrow_style="-|>",
-                )
-            elif ax and coord_next_right in coords_traveled:
-                arrow_inflexion(
-                    ax=ax,
-                    start=(1, 1),
-                    end=(1, 0),
-                    angleA=0,
-                    angleB=90,
-                    radius=0,
-                    arrow_style="-|>",
-                )
+            if draw_arrows:
+                # Draw arrow.
+                # Coords reversed because want on top.
+                if (
+                    ax
+                    and coord_next_down in coords_traveled
+                    and coord_next_right in coords_traveled
+                ):
+                    arrow_inflexion(
+                        ax=ax,
+                        start=(2, 1),
+                        end=(1, 0),
+                        angleA=0,
+                        angleB=90,
+                        radius=0,
+                        arrow_style="<|-|>",
+                    )
+                elif ax and coord_next_down in coords_traveled:
+                    arrow_inflexion(
+                        ax=ax,
+                        start=(1, 1),
+                        end=(2, 1),
+                        angleA=0,
+                        angleB=90,
+                        radius=0,
+                        arrow_style="-|>",
+                    )
+                elif ax and coord_next_right in coords_traveled:
+                    arrow_inflexion(
+                        ax=ax,
+                        start=(1, 1),
+                        end=(1, 0),
+                        angleA=0,
+                        angleB=90,
+                        radius=0,
+                        arrow_style="-|>",
+                    )
 
-            if (
-                ax
-                and not brk_up_left
-                and not brk_down_right
-                and coord_next_down not in coords_traveled
-                and coord_next_right not in coords_traveled
-            ):
-                max_x = nx
-                # Hit end.
-                circle = plt.Circle((1, 1), radius=0.25, color="black")
-                ax.add_artist(circle)
+                if (
+                    ax
+                    and not brk_up_left
+                    and not brk_down_right
+                    and coord_next_down not in coords_traveled
+                    and coord_next_right not in coords_traveled
+                ):
+                    max_x = nx
+                    # Hit end.
+                    circle = plt.Circle((1, 1), radius=0.25, color="black")
+                    if draw_arrows:
+                        ax.add_artist(circle)
 
         if not idents:
             continue
@@ -240,8 +255,8 @@ def main():
             continue
         print(start, end)
 
-    fig.savefig("bfs.png", dpi=300)
-    fig.savefig("bfs.pdf", dpi=300)
+    fig.savefig(f"{args.output_prefix}.pdf", dpi=300, bbox_inches="tight")
+    fig.savefig(f"{args.output_prefix}.png", dpi=300, bbox_inches="tight")
 
 
 if __name__ == "__main__":

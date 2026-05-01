@@ -1,16 +1,18 @@
+import ast
 import argparse
-from matplotlib.patches import Patch
 import polars as pl
 import pyideogram as pyid
 import matplotlib.pyplot as plt
+import matplotlib.patheffects as pe
 
 from matplotlib.axes import Axes
+from matplotlib.patches import Patch
 from matplotlib.colors import rgb2hex
 
 plt.rcParams["font.family"] = "Arial"
 
 CALL_COLOR_KEY = {
-    "truth": "black",
+    "curated": "black",
     "false_positive": "#ADD8E6",
     "true_positive": "blue",
     "false_negative": "red",
@@ -26,14 +28,14 @@ BANDCOL = {
     "stalk": (0.45, 0.4, 0.8),
 }
 CALL_NAMES = {
-    "truth": "Truth",
+    "curated": "Curated",
     "false_positive": "Ambiguous",
     "true_positive": "True Positive",
     "false_negative": "False Negative",
 }
 LBL_KWARGS = dict(rotation=0, ha="right", va="center", fontsize="medium")
 TOOL_COLORS = {
-    "Truth": "black",
+    "Curated": "black",
     "Inspector v1.3": "teal",
     "HMM-Flagger v1.1.0": "magenta",
     "DeepVariant v1.9.0": "maroon",
@@ -112,13 +114,14 @@ def rgb_to_hex(srs: pl.Series) -> pl.Series:
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--cytobands")
-    ap.add_argument("--truth")
+    ap.add_argument("--curated")
     ap.add_argument("--nucflag")
     ap.add_argument("--flagger")
     ap.add_argument("--inspector")
     ap.add_argument("--deepvariant")
     ap.add_argument("--segdups")
     ap.add_argument("--censat")
+    ap.add_argument("--xlim", type=ast.literal_eval, help="x-axis limit")
     ap.add_argument("-o", "--output_prefix", default="out", help="Output file.")
     ap.add_argument(
         "-f", "--fp", action="store_true", help='Include "false-positives".'
@@ -134,13 +137,13 @@ def main():
         new_columns=["chrom", "st", "end", "type"],
     )
     dfs_calls = {
-        "Truth": pl.read_csv(
-            args.truth,
+        "Curated": pl.read_csv(
+            args.curated,
             separator="\t",
             columns=[0, 1, 2, 3],
             new_columns=["chrom", "st", "end", "patch"],
         )
-        .with_columns(type=pl.lit("truth"))
+        .with_columns(type=pl.lit("curated"))
         .filter(pl.col("chrom") == args.chrom),
         "NucFlag v1.0": pl.read_csv(args.nucflag, **missed_calls_kwargs).filter(
             pl.col("chrom") == args.chrom
@@ -254,8 +257,8 @@ def main():
     )
 
     indices_calls = range(3, 8)  #
-    idx_censat = 0
-    idx_segdup = 1
+    idx_segdup = 0
+    idx_censat = 1
     idx_chrom = 2
     idx_censat_legend = 8  #
     idx_segdup_legend = 9  #
@@ -270,6 +273,30 @@ def main():
     minimize_ax(ax)
 
     pyid.ideogramh(args.chrom, cytobands, ax)
+
+    # Iterate thru cytobands and add label in center.
+    df_cytobands = (
+        pl.scan_csv(
+            args.cytobands,
+            separator="\t",
+            has_header=False,
+            new_columns=["chrom", "st", "end", "position", "band"],
+        )
+        .filter(pl.col("chrom").eq(pl.lit(args.chrom)) & pl.col("position").ne("."))
+        .collect()
+    )
+    for row in df_cytobands.iter_rows(named=True):
+        midpt = row["st"] + (row["end"] - row["st"]) // 2
+        ax.annotate(
+            row["position"],
+            xy=(midpt, 0),
+            ha="center",
+            va="center",
+            fontsize=6,
+            rotation="vertical",
+            rotation_mode="anchor",
+            path_effects=[pe.withStroke(linewidth=1, foreground="w")],
+        )
 
     # Add sequence context.
     ax_censat: Axes = axes[idx_censat]
@@ -326,7 +353,7 @@ def main():
                 labels_handles = {
                     CALL_NAMES[call]: Patch(facecolor=color, edgecolor="black")
                     for call, color in CALL_COLOR_KEY.items()
-                    if call != "truth"
+                    if call != "curated"
                 }
             else:
                 labels_handles = {
@@ -355,6 +382,8 @@ def main():
             handleheight=0.7,
         )
 
+    if args.xlim:
+        ax.set_xlim(args.xlim)
     fig.savefig(f"{args.output_prefix}.pdf", bbox_inches="tight", dpi=600)
     fig.savefig(f"{args.output_prefix}.png", bbox_inches="tight", dpi=600)
 

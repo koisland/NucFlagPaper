@@ -7,10 +7,13 @@ import polars as pl
 import intervaltree as it
 import matplotlib.pyplot as plt
 
+from functools import lru_cache
 from matplotlib.axes import Axes
 from matplotlib.patches import Patch
 from collections import defaultdict
-from functools import lru_cache
+from matplotlib import colormaps
+from matplotlib.cm import ScalarMappable
+from matplotlib.colors import BoundaryNorm
 
 
 BEDPE_IMPG_COLS = ("qchrom", "qst", "qend", "rchrom", "rst", "rend", "ritv")
@@ -25,7 +28,7 @@ TYPES = (
     "other_repeat",
     "softclip",
 )
-CMAP = plt.get_cmap("OrRd")
+CMAP = colormaps.get_cmap("OrRd")
 NO_OVL_COLOR = "gray"
 CTG_BRK_COLOR = "black"
 NORM = matplotlib.colors.Normalize(vmin=0, vmax=100)
@@ -36,7 +39,17 @@ LEGEND_KWARGS = dict(
     fancybox=False,
     frameon=False,
 )
-
+SEGDUP_COLORS = dict(
+    zip(
+        [
+            r"Less than 90% similarity",
+            r"90 - 98% similarity",
+            r"98 - 99% similarity",
+            r"Greater than 99% similarity",
+        ],
+        ["#800080", "#808080", "#ffff00ff", "#ffa500"],
+    )
+)
 plt.rcParams["font.family"] = "Arial"
 
 
@@ -57,31 +70,38 @@ def minimalize_ax(ax: Axes, *, remove_ticks: bool = False) -> None:
         )
 
 
-def draw_perc_ovl_legend(obj: plt.Figure):
+def draw_perc_ovl_legend(fig: plt.Figure):
     # Draw perc overlap
-    legend_handles_perc_calls = {}
     increment = 10
-    for brkpt in range(0, 110, increment):
-        color = CMAP(NORM(brkpt))
-        legend_handles_perc_calls[f"{brkpt}%"] = Patch(
-            edgecolor="black", facecolor=color
-        )
-    labels = [*legend_handles_perc_calls.keys(), "No overlap", "Contig break"]
+    bounds = [brkpt for brkpt in range(0, 110, increment)]
+
+    # https://matplotlib.org/stable/users/explain/colors/colorbar_only.html#discrete-and-extended-colorbar-with-continuous-colorscale
+    norm = BoundaryNorm(bounds, CMAP.N, extend="both")
+
+    ax: Axes = fig.gca()
+    fig.colorbar(
+        ScalarMappable(norm=norm, cmap=CMAP),
+        cax=ax,
+        orientation="horizontal",
+    )
+
+    ax.tick_params(axis="both", which="major", labelsize=14)
+    ax.set_xlabel("Percent NucFlag call overlap", fontsize=18)
+
+    labels = ["No overlap", "Contig break"]
     handles = [
-        *legend_handles_perc_calls.values(),
         Patch(edgecolor="black", facecolor=NO_OVL_COLOR),
         Patch(edgecolor="black", facecolor=CTG_BRK_COLOR),
     ]
-    obj.legend(
+    fig.legend(
         labels=labels,
         handles=handles,
         title_fontsize=18,
         fontsize=16,
         ncols=len(labels),
-        title="Percent NucFlag call overlap",
         loc="center",
         alignment="left",
-        bbox_to_anchor=(0.5, -0.1),
+        bbox_to_anchor=(0.5, -0.2),
         **LEGEND_KWARGS,
     )
 
@@ -144,6 +164,7 @@ def main():
     annotations: defaultdict[str, defaultdict[str, set[it.Interval]]] = defaultdict(
         lambda: defaultdict(set)
     )
+    dfs_annot = []
     for lbl, annot in zip(args.annotation_labels, args.annotations, strict=True):
         df_annot = pl.read_csv(
             annot,
@@ -161,7 +182,8 @@ def main():
                 "item_rgb",
             ],
             columns=list(range(9)),
-        )
+        ).with_columns(lbl=pl.lit(lbl))
+        dfs_annot.append(df_annot)
 
         for row in df_annot.iter_rows(named=True):
             annotations[lbl][row["chrom"]].add(
@@ -171,6 +193,7 @@ def main():
                     (row["name"], convert_item_rgb(row["item_rgb"])),
                 )
             )
+    df_all_annot = pl.concat(dfs_annot)
 
     n_annotations = len(annotations)
     label_order = {lbl: i + n_annotations for i, lbl in enumerate(label_colors.keys())}
@@ -321,16 +344,89 @@ def main():
     for rchrom, (fig, axes) in figs.items():
         for ax in axes:
             ax.xaxis.set_major_formatter(formatter=lambda x, _: f"{x / 1_000_000:.1f}")
-        fig.savefig(
-            os.path.join(args.output_dir, f"{rchrom}.png"), bbox_inches="tight", dpi=300
+
+        fig.suptitle(
+            rchrom.replace("CHM13v2.0_chr", "Chromosome "),
+            x=0.0,
+            fontsize=24,
+            weight="bold",
+            horizontalalignment="left",
+            verticalalignment="center",
         )
+
+        outfile_prefix = os.path.join(args.output_dir, f"{rchrom}")
+        fig.savefig(f"{outfile_prefix}.png", bbox_inches="tight", dpi=300)
         plt.close(fig)
 
-    fig_legend = plt.figure()
-    draw_perc_ovl_legend(fig_legend)
-    fig_legend.savefig(
-        os.path.join(args.output_dir, "legend.png"), bbox_inches="tight", dpi=300
-    )
+        # Create figure for each
+        fig_legend, axes_legend = plt.subplots(
+            nrows=len(args.annotation_labels), layout="constrained"
+        )
+
+        for i, lbl in enumerate(args.annotation_labels):
+            ax_legend: Axes = axes_legend[i]
+            minimalize_ax(ax_legend, remove_ticks=True)
+            if lbl == "Segmental duplications":
+                # Use predefined colors. May include those not shown in data.
+                ax_legend.legend(
+                    labels=SEGDUP_COLORS.keys(),
+                    handles=[
+                        Patch(edgecolor="black", facecolor=color)
+                        for color in SEGDUP_COLORS.values()
+                    ],
+                    loc="center",
+                    title=lbl,
+                    title_fontsize=18,
+                    fontsize=16,
+                    ncols=len(SEGDUP_COLORS.keys()),
+                    alignment="left",
+                    **LEGEND_KWARGS,
+                )
+            else:
+                df_annot = df_all_annot.filter(
+                    pl.col("chrom").eq(pl.lit(rchrom)) & pl.col("lbl").eq(lbl)
+                )
+                if lbl == "Satellite structure":
+                    # Only take first part of censat name dhor_*
+                    uniq_elems = {
+                        name.split("_")[0]: convert_item_rgb(item_rgb)
+                        for name, item_rgb in df_annot.select("name", "item_rgb")
+                        .unique()
+                        .sort(by="name")
+                        .iter_rows()
+                    }
+                else:
+                    uniq_elems = {
+                        name: convert_item_rgb(item_rgb)
+                        for name, item_rgb in df_annot.select("name", "item_rgb")
+                        .unique()
+                        .sort(by="name")
+                        .iter_rows()
+                    }
+                ax_legend.legend(
+                    title=lbl,
+                    labels=uniq_elems.keys(),
+                    loc="center",
+                    handles=[
+                        Patch(edgecolor="black", facecolor=color)
+                        for color in uniq_elems.values()
+                    ],
+                    title_fontsize=18,
+                    fontsize=16,
+                    ncols=len(uniq_elems),
+                    alignment="left",
+                    **LEGEND_KWARGS,
+                )
+
+        fig_legend.savefig(f"{outfile_prefix}_legend.png", bbox_inches="tight", dpi=300)
+        fig_legend.savefig(f"{outfile_prefix}_legend.pdf", bbox_inches="tight", dpi=300)
+        plt.close(fig_legend)
+
+    fig_ovl_legend = plt.figure(figsize=(8, 1), layout="constrained")
+    draw_perc_ovl_legend(fig_ovl_legend)
+    output_prefix_ovl = os.path.join(args.output_dir, "ovl_legend")
+    fig_ovl_legend.savefig(f"{output_prefix_ovl}.png", bbox_inches="tight", dpi=300)
+    fig_ovl_legend.savefig(f"{output_prefix_ovl}.pdf", bbox_inches="tight", dpi=300)
 
 
 if __name__ == "__main__":

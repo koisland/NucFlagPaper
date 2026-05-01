@@ -8,6 +8,8 @@ import matplotlib.pyplot as plt
 
 from matplotlib.axes import Axes
 
+plt.rcParams["font.family"] = "Arial"
+
 OUTFILE_KWARGS = dict(file=sys.stdout, sep="\t")
 LEGEND_KWARGS = dict(
     handlelength=1.0,
@@ -64,7 +66,7 @@ def main():
     )
     label_colors = dict(zip(args.labels, args.colors, strict=True))
 
-    for i, col in enumerate(("Precision", "Recall", "F1")):
+    for i, col in enumerate(("F1", "Recall", "Precision")):
         ax: Axes = axes[i]
         df_type = df.filter(pl.col("type") == col)
 

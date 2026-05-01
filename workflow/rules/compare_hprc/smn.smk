@@ -156,7 +156,6 @@ rule plot_r1_r2_chm13_coords:
             join(OUTPUT_DIR, "data", "{sm_release}.fa.gz.fai"),
             sm_release=get_sms_release("R2"),
         ),
-        sample_metadata=SM_METADATA,
     output:
         multiext(join(OUTPUT_DIR, "smn", "smn_locus_r1_r2"), ".png", ".pdf"),
     params:
@@ -171,7 +170,6 @@ rule plot_r1_r2_chm13_coords:
         --r2_nucflag {input.r2_nucflag} \
         --r1_fai {input.r1_fai} \
         --r2_fai {input.r2_fai} \
-        --sm_metadata {input.sample_metadata} \
         --output_prefix {params.output_prefix}
         """
 
@@ -184,4 +182,4 @@ rule smn_all:
             ref="CHM13v2.0",
             sm_release=list(get_sms_release(*RELEASES)),
         ),
-        # rules.plot_r1_r2_chm13_coords.output,
+        rules.plot_r1_r2_chm13_coords.output,

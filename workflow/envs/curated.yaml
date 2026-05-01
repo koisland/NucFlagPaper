@@ -8,9 +8,11 @@ dependencies:
   - longdust
   - python==3.12.0
   - polars
-  - matplotlib
+  - matplotlib==3.8.4
   - seaborn
-  - numpy
+  # Numpy 2.4 breaks
+  # https://github.com/apple/coremltools/pull/2632
+  - numpy==2.3.5
   - pysam
   - pandas
   - scipy

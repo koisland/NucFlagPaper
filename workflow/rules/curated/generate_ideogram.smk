@@ -3,7 +3,8 @@ rule download_annotation_data:
     output:
         segdups=join(IDEOGRAM_OUTPUT_DIR, "HG002.SDs.010624.45col.bb"),
         censat=join(IDEOGRAM_OUTPUT_DIR, "hg002v1.0.1.cenSatv2.0.noheader.bb"),
-        cytoband=join(IDEOGRAM_OUTPUT_DIR, "cytoBand.hg002v1.0.bb"),
+        cytoband_pat=join(IDEOGRAM_OUTPUT_DIR, "hg002v1.1.pat_cytoBandMapped.bb"),
+        cytoband_mat=join(IDEOGRAM_OUTPUT_DIR, "hg002v1.1.mat_cytoBandMapped.bb"),
     params:
         output_dir=IDEOGRAM_OUTPUT_DIR,
         urls=" ".join(ANNOTATIONS_V101),
@@ -23,59 +24,30 @@ rule convert_to_bed:
     input:
         segdups=rules.download_annotation_data.output.segdups,
         censat=rules.download_annotation_data.output.censat,
-        cytoband=rules.download_annotation_data.output.cytoband,
+        cytoband_pat=rules.download_annotation_data.output.cytoband_pat,
+        cytoband_mat=rules.download_annotation_data.output.cytoband_mat,
     output:
         segdups=join(IDEOGRAM_OUTPUT_DIR, "HG002.SDs.010624.45col.bed"),
         censat=join(IDEOGRAM_OUTPUT_DIR, "hg002v1.0.1.cenSatv2.0.noheader.bed"),
-        cytoband=join(IDEOGRAM_OUTPUT_DIR, "cytoBand.hg002v1.0.bed"),
+        cytoband=join(IDEOGRAM_OUTPUT_DIR, "cytoBand.hg002v1.1.bed"),
     conda:
         "../../envs/tools.yaml"
     shell:
         """
         bigbedtobed {input.segdups} {output.segdups}
         bigbedtobed {input.censat} {output.censat}
-        bigbedtobed {input.cytoband} {output.cytoband}
-        """
-
-
-rule format_cytoband:
-    input:
-        censat=rules.convert_to_bed.output.censat,
-        cytoband=rules.convert_to_bed.output.cytoband,
-        fai=expand(rules.download_curated_asm.output.fai, version="v1.0.1")[0],
-    output:
-        cytoband=join(IDEOGRAM_OUTPUT_DIR, "cytoBand.hg002v1.0.formatted.bed"),
-    params:
-        bp_merge=5_000_000,
-    conda:
-        "../../envs/tools.yaml"
-    shell:
-        """
-        cat \
-            <(grep active_hor {input.censat} | \
-            bedtools merge -i - -d {params.bp_merge} | \
-            awk -v OFS="\\t" '{{
-                midpt=int((($3-$2)/2) + $2);
-                print $1, $2, midpt, ".", "acen";
-                print $1, midpt, $3, ".", "acen"
-            }}') \
-            {input.cytoband} | \
-        sort -k1,1 -k2,2n > {output.cytoband}.tmp
-
-        bedtools subtract \
-            -a <(grep -v <(printf "chrEBV\\nchrM\\n") {input.fai} | awk -v OFS="\\t" '{{ print $1, 0, $2 }}') \
-            -b {output.cytoband}.tmp | \
-        awk -v OFS="\\t" '{{ print $0, ".", "gneg" }}' >> {output.cytoband}.tmp
-        sort -k1,1 -k2,2n {output.cytoband}.tmp > {output.cytoband}
-        rm -f {output.cytoband}.tmp
+        bigbedtobed {input.cytoband_pat} {output.cytoband}.1
+        bigbedtobed {input.cytoband_mat} {output.cytoband}.2
+        cat {output.cytoband}.1 {output.cytoband}.2 > {output.cytoband}
+        rm -f {output.cytoband}.1 {output.cytoband}.2
         """
 
 
 rule plot_ideogram:
     input:
         script="workflow/scripts/metrics/plot_curated_ideogram.py",
-        cytobands=rules.format_cytoband.output,
-        truth=expand(rules.convert_vcf_to_bed.output, version="v1.0.1"),
+        cytobands=rules.convert_to_bed.output.cytoband,
+        curated=expand(rules.convert_vcf_to_bed.output, version="v1.0.1"),
         nucflag_calls=expand(
             rules.calculate_precision_recall.output.missed_calls_dir,
             tool="nucflag",
@@ -97,8 +69,6 @@ rule plot_ideogram:
             version="v1.0.1",
         ),
         fai=expand(rules.download_curated_asm.output.fai, version=f"v1.0.1")[0],
-        segdups=rules.convert_to_bed.output.segdups,
-        censat=rules.convert_to_bed.output.censat,
     output:
         plots=[
             join(IDEOGRAM_OUTPUT_DIR, "ideogram_{cond}.png"),
@@ -115,13 +85,12 @@ rule plot_ideogram:
         python {input.script} \
         --fai {input.fai} \
         --cytobands {input.cytobands} \
-        --truth {input.truth} \
+        --curated {input.curated} \
         --nucflag {input.nucflag_calls}/missed_calls.bed \
         --inspector {input.inspector_calls}/missed_calls.bed \
         --deepvariant {input.deepvariant_calls}/missed_calls.bed \
         --flagger {input.flagger_calls}/missed_calls.bed \
-        --segdups {input.segdups} \
-        --censat {input.censat} {params.include_false_positives} \
+        {params.include_false_positives} \
         -o {params.output_prefix}
         """
 
@@ -129,8 +98,8 @@ rule plot_ideogram:
 rule plot_ideogram_chrom:
     input:
         script="workflow/scripts/metrics/plot_curated_ideogram_chrom.py",
-        cytobands=rules.format_cytoband.output,
-        truth=expand(rules.convert_vcf_to_bed.output, version=f"v1.0.1"),
+        cytobands=rules.convert_to_bed.output.cytoband,
+        curated=expand(rules.convert_vcf_to_bed.output, version=f"v1.0.1"),
         nucflag_calls=expand(
             rules.calculate_precision_recall.output.missed_calls_dir,
             tool="nucflag",
@@ -161,13 +130,19 @@ rule plot_ideogram_chrom:
     params:
         include_false_positives=lambda wc: "-f" if wc.cond == "fp" else "",
         output_prefix=lambda wc, output: splitext(output[0])[0],
+        # Set to length of chrY
+        xlim=lambda wc: (
+            "--xlim '(0, 62425491)'"
+            if wc.chrom == "chr21_PATERNAL" or wc.chrom == "chrY_PATERNAL"
+            else ""
+        ),
     conda:
         "../../envs/tools.yaml"
     shell:
         """
         python {input.script} \
         --cytobands {input.cytobands} \
-        --truth {input.truth} \
+        --curated {input.curated} \
         --nucflag {input.nucflag_calls}/missed_calls.bed \
         --inspector {input.inspector_calls}/missed_calls.bed \
         --flagger {input.flagger_calls}/missed_calls.bed \
@@ -175,7 +150,7 @@ rule plot_ideogram_chrom:
         --segdups {input.segdups} \
         --censat {input.censat} \
         -o {params.output_prefix} {params.include_false_positives} \
-        -c {wildcards.chrom}
+        -c {wildcards.chrom} {params.xlim}
         """
 
 

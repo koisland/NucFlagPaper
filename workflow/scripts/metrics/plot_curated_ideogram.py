@@ -11,10 +11,17 @@ plt.rcParams["font.family"] = "Arial"
 
 CHROMS = [f"chr{i}" for i in range(1, 23)] + ["chrXY"]
 CALL_COLOR_KEY = {
-    "truth": "black",
+    "curated": "black",
     "false_positive": "#ADD8E6",
     "true_positive": "blue",
     "false_negative": "red",
+}
+# Colors really hard to see with large image. Prioritize false TP and FN.
+CALL_ZORDER = {
+    "curated": 1,
+    "false_positive": 0,
+    "true_positive": 2,
+    "false_negative": 2,
 }
 BANDCOL = {
     "gneg": (0.95, 0.95, 0.95),
@@ -27,7 +34,7 @@ BANDCOL = {
     "stalk": (0.45, 0.4, 0.8),
 }
 CALL_NAMES = {
-    "truth": "Truth",
+    "curated": "Curated",
     "false_positive": "Ambiguous",
     "true_positive": "True Positive",
     "false_negative": "False Negative",
@@ -35,7 +42,7 @@ CALL_NAMES = {
 BAND_COLORS = pyid.BANDCOL | {"none": (1.0, 1.0, 1.0)}
 LBL_KWARGS = dict(rotation=0, ha="right", va="center")
 TOOL_COLORS = {
-    "Truth": "black",
+    "Curated": "black",
     "Inspector v1.3": "teal",
     "HMM-Flagger v1.1.0": "magenta",
     "DeepVariant v1.9.0": "maroon",
@@ -56,13 +63,11 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--cytobands")
     ap.add_argument("--fai")
-    ap.add_argument("--truth")
+    ap.add_argument("--curated")
     ap.add_argument("--nucflag")
     ap.add_argument("--flagger")
     ap.add_argument("--deepvariant")
     ap.add_argument("--inspector")
-    ap.add_argument("--segdups")
-    ap.add_argument("--censat")
     ap.add_argument(
         "-f", "--fp", action="store_true", help='Include "false-positives".'
     )
@@ -77,12 +82,12 @@ def main():
         new_columns=["chrom", "st", "end", "type"],
     )
     dfs_calls = {
-        "Truth": pl.read_csv(
-            args.truth,
+        "Curated": pl.read_csv(
+            args.curated,
             separator="\t",
             columns=[0, 1, 2, 3],
             new_columns=["chrom", "st", "end", "patch"],
-        ).with_columns(type=pl.lit("truth")),
+        ).with_columns(type=pl.lit("curated")),
         "NucFlag v1.0": pl.read_csv(args.nucflag, **missed_calls_kwargs),
         "Inspector v1.3": pl.read_csv(args.inspector, **missed_calls_kwargs),
         "HMM-Flagger v1.1.0": pl.read_csv(args.flagger, **missed_calls_kwargs),
@@ -259,7 +264,10 @@ def main():
                 )
                 for row in df_calls.iter_rows(named=True):
                     color = color_key[row["type"]]
-                    ax_track.axvspan(xmin=row["st"], xmax=row["end"], color=color)
+                    zorder = CALL_ZORDER[row["type"]]
+                    ax_track.axvspan(
+                        xmin=row["st"], xmax=row["end"], color=color, zorder=zorder
+                    )
 
             ax_chrom.set_xlim(0, max_length)
             pyid.ideogramh(
@@ -288,7 +296,7 @@ def main():
             handles=[
                 Patch(facecolor=color, edgecolor="black", label=CALL_NAMES[lbl])
                 for lbl, color in color_key.items()
-                if lbl != "truth"
+                if lbl != "curated"
             ],
             bbox_to_anchor=(0.5, 0.5),
             loc="center",

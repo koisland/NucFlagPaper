@@ -25,7 +25,9 @@ ASSEMBLIES = {
 ANNOTATIONS_V101 = [
     "https://s3-us-west-2.amazonaws.com/human-pangenomics/T2T/HG002/assemblies/annotation/segdups/HG002.SDs.010624.45col.bb",
     "https://s3-us-west-2.amazonaws.com/human-pangenomics/T2T/HG002/assemblies/annotation/centromere/hg002v1.0.1_v2.0/hg002v1.0.1.cenSatv2.0.noheader.bb",
-    "https://42basepairs.com/download/s3/human-pangenomics/T2T/HG002/assemblies/annotation/cytoband/cytoBand.hg002v1.0.bb",
+    # We use v1.1 because v1.0 is incomplete. Not great but only for visualization purpose
+    "https://s3-us-west-2.amazonaws.com/human-pangenomics/T2T/HG002/assemblies/annotation/cytoband/hg002v1.1.pat_cytoBandMapped.bb",
+    "https://s3-us-west-2.amazonaws.com/human-pangenomics/T2T/HG002/assemblies/annotation/cytoband/hg002v1.1.mat_cytoBandMapped.bb",
 ]
 ELEMENT = {
     "R1": "s3://human-pangenomics/T2T/scratch/HG002/sequencing/element/trio/HG002/ins1000/ASHG-C063_R1.fastq.gz",

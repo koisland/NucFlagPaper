@@ -176,8 +176,8 @@ rule plot_heatmap_chm13_impg:
             sm=[f"{sm}_hifi" for sm in ASM_COLORS.keys()],
         ),
         annots=[
-            rules.download_annotations.output.censat,
             rules.download_annotations.output.segdups,
+            rules.download_annotations.output.censat,
         ],
         fais=[
             expand(rules.rename_assemblies.output.asm_fai, sm=sm)
@@ -193,7 +193,7 @@ rule plot_heatmap_chm13_impg:
                 for annot in input.annots
             ]
         ),
-        annot_labels=["'Satellite structure'", "'Segmental duplications'"],
+        annot_labels=["'Segmental duplications'", "'Satellite structure'"],
         labels=" ".join(ASM_COLORS.keys()),
         colors=" ".join(ASM_COLORS.values()),
     shell:

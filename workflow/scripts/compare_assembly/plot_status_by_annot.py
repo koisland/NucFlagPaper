@@ -4,7 +4,6 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 import matplotlib.patheffects as pe
 
-from typing import Collection
 from matplotlib.axes import Axes
 from matplotlib.patches import Patch
 
@@ -41,12 +40,10 @@ def format_bar_ax(ax: Axes, name_colors: dict[str, str]):
     ax.set_xlabel(None)
 
 
-def format_group_length_ax(
-    ax: Axes, patches: Collection[Patch], name_colors: dict[str, str]
-):
-    for spine in ["right", "bottom"]:
+def format_group_length_ax(ax: Axes, name_colors: dict[str, str]):
+    for spine in ["right", "top"]:
         ax.spines[spine].set_visible(False)
-    ax.invert_yaxis()
+
     ax.set_ylabel("Length (Mbp)", fontsize=14)
     ax.set_xlabel(None)
     ax.tick_params(axis="both", which="major", labelsize=14)
@@ -62,10 +59,6 @@ def format_group_length_ax(
     for c in ax.containers:
         labels = [str(round(v.get_height())) for v in c]
         ax.bar_label(c, labels=labels, label_type="edge", fontsize=9)
-
-    # Hatch on bottom so visually distinct
-    for ptch in patches:
-        ptch.set_hatch("//")
 
 
 def main():
@@ -134,7 +127,7 @@ def main():
     format_bar_ax(ax_bar, group_colors)
 
     ax_liftover: Axes = axes[1]
-    bar = sns.barplot(
+    sns.barplot(
         df_all.with_columns(pl.col("group_length") / 1_000_000),
         x="group",
         hue="label",
@@ -145,7 +138,7 @@ def main():
         ax=ax_liftover,
         legend=None,
     )
-    format_group_length_ax(ax_liftover, patches=bar.patches, name_colors=group_colors)
+    format_group_length_ax(ax_liftover, name_colors=group_colors)
 
     fig_legend = plt.figure(layout="constrained", figsize=(2, 2))
     fig_legend.legend(
@@ -161,12 +154,13 @@ def main():
         args.title,
         x=0.0,
         fontsize=18,
+        weight="bold",
         horizontalalignment="left",
         verticalalignment="center",
     )
-    fig.savefig(f"{args.output_prefix}.png", bbox_inches="tight")
-    fig.savefig(f"{args.output_prefix}.pdf", bbox_inches="tight")
-    fig_legend.savefig(f"{args.output_prefix}_legend.png", bbox_inches="tight")
+    fig.savefig(f"{args.output_prefix}.png", bbox_inches="tight", dpi=300)
+    fig.savefig(f"{args.output_prefix}.pdf", bbox_inches="tight", dpi=300)
+    fig_legend.savefig(f"{args.output_prefix}_legend.png", bbox_inches="tight", dpi=300)
 
 
 if __name__ == "__main__":

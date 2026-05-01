@@ -1,4 +1,4 @@
-import sys
+from matplotlib.patches import Patch
 import json
 import argparse
 import numpy as np
@@ -14,7 +14,6 @@ from collections import defaultdict, Counter
 from upsetplot import UpSet, from_indicators
 
 RENAME_TOOLS = {
-    "nucflag_no_homopolymers": "NucFlag v1.0 (No homopolymers)",
     "nucflag": "NucFlag v1.0",
     "deepvariant": "DeepVariant v1.9 (FILTER=='PASS')",
     "flagger": "HMM-Flagger v1.1.0",
@@ -23,11 +22,18 @@ RENAME_TOOLS = {
 COLORS = dict(
     zip(
         RENAME_TOOLS.values(),
-        ["blue", "purple", "maroon", "magenta", "teal"],
+        ["purple", "maroon", "magenta", "teal"],
         strict=True,
     )
 )
-
+LEGEND_KWARGS = dict(
+    handlelength=1.0,
+    handleheight=1.0,
+    borderaxespad=0,
+    fancybox=False,
+    frameon=False,
+    alignment="left",
+)
 plt.rcParams["font.family"] = "Arial"
 
 
@@ -86,28 +92,11 @@ def main():
                     (call["name"], tool),
                 )
             )
-        if tool == "nucflag":
-            df_homopolymers_only = df_call.filter(
-                ~pl.col("name").eq("homopolymer")
-            ).with_columns(len=pl.col("chromEnd") - pl.col("chromStart"))
-            print(
-                f"Homopolymer length total: {df_homopolymers_only['len'].sum()}",
-                file=sys.stderr,
-            )
-            for call in df_call.filter(~pl.col("name").eq("homopolymer")).iter_rows(
-                named=True
-            ):
-                itree_calls[call["#chrom"]].add(
-                    Interval(
-                        call["chromStart"],
-                        call["chromEnd"],
-                        (call["name"], f"{tool}_no_homopolymers"),
-                    )
-                )
 
     ovl_counts: Counter[str] = Counter()
     all_ovls = set()
     file_handles: dict[str, TextIO] = {}
+    nucflag_non_homopolymer_ovl_name_counts: Counter[tuple[str, ...]] = Counter()
     for chrom, itrees in itree_calls.items():
         itv: Interval
         ovl: set[Interval]
@@ -119,9 +108,10 @@ def main():
             if ovl_sorted in all_ovls:
                 continue
             # Then create overlap name.
-            ovl_name: str = "-".join(sorted(set(itv.data[1] for itv in ovl_sorted)))
-            if file_handles.get(ovl_name):
-                fh = file_handles[ovl_name]
+            ovl_name = sorted(set(itv.data[1] for itv in ovl_sorted))
+            ovl_name_joined: str = "-".join(ovl_name)
+            if file_handles.get(ovl_name_joined):
+                fh = file_handles[ovl_name_joined]
                 print(
                     chrom,
                     *[
@@ -132,8 +122,16 @@ def main():
                     file=fh,
                 )
             else:
-                file_handles[ovl_name] = open(f"{output_prefix}_{ovl_name}.bed", "wt")
-            ovl_counts[ovl_name] += 1
+                file_handles[ovl_name_joined] = open(
+                    f"{output_prefix}_{ovl_name_joined}.bed", "wt"
+                )
+            # Count when non-homopolymer
+            if itv.data[1] == "nucflag" and itv.data[0] != "homopolymer":
+                nucflag_non_homopolymer_ovl_name_counts[
+                    tuple(RENAME_TOOLS[tool] for tool in ovl_name)
+                ] += 1
+
+            ovl_counts[ovl_name_joined] += 1
             all_ovls.add(ovl_sorted)
 
     for fh in file_handles.values():
@@ -165,7 +163,7 @@ def main():
         data=df_ovl_counts,
         show_counts=True,
         sum_over="value",
-        sort_by="cardinality",
+        sort_by="-degree",
         sort_categories_by="input",
     )
     for lbl, color in COLORS.items():
@@ -179,29 +177,37 @@ def main():
 
     # Add stacked bar. We cannot use existing implementation because we don't have a grouping var.
     ax_intersections: Axes = subplots["intersections"]
-    intersections = sorted(rows_ovl_counts, key=lambda x: x["value"], reverse=True)
+    # Jank but use height of bar to determine which intersection
+    height_to_intersection_map = {it["value"]: it for it in rows_ovl_counts}
     x_coords = []
     widths = []
     heights = defaultdict(list)
+    all_intersections = []
+    non_homopolymer_heights = []
     for container in ax_intersections.containers:
-        for intersection, ptch in zip(intersections, container.patches):
+        for ptch in container.patches:
             ptch: Rectangle
+            height = ptch.get_height()
             x_coords.append(ptch.get_x())
             widths.append(ptch.get_width())
-
+            intersection = height_to_intersection_map[height]
+            non_homopolymer_height = nucflag_non_homopolymer_ovl_name_counts.get(
+                tuple(sorted(k for k, v in intersection.items() if v and k != "value")),
+                0,
+            )
+            non_homopolymer_heights.append(non_homopolymer_height)
             intersection_size = sum(
                 1 for tool in COLORS.keys() if intersection.get(tool)
             )
             # Divide height by intersection size so even height prop
             for tool in COLORS.keys():
                 heights[tool].append(
-                    ptch.get_height() / intersection_size
-                    if intersection.get(tool)
-                    else 0
+                    height / intersection_size if intersection.get(tool) else 0
                 )
             ptch.remove()
+            all_intersections.append(intersection)
 
-    bottom = np.zeros(len(intersections))
+    bottom = np.zeros(len(rows_ovl_counts))
     for tool, color in COLORS.items():
         heights_tool = heights[tool]
         ax_intersections.bar(
@@ -214,6 +220,27 @@ def main():
         )
         bottom += heights_tool
 
+    # Add final hatched bar
+    non_homopolymer_bars = ax_intersections.bar(
+        x=x_coords,
+        height=non_homopolymer_heights,
+        width=widths,
+        color=COLORS["NucFlag v1.0"],
+        hatch="///",
+        edgecolor="black",
+        align="edge",
+    )
+    non_homopolymer_bar_labels = [
+        cnt.get_height() if cnt.get_height() else "" for cnt in non_homopolymer_bars
+    ]
+    ax_intersections.bar_label(non_homopolymer_bars, non_homopolymer_bar_labels)
+    ax_intersections.set_ylabel("# of error calls")
+    ax_intersections.legend(
+        loc="upper left",
+        handles=[Patch(edgecolor="black", fill=False, hatch="////")],
+        labels=["Non-homopolymers"],
+        **LEGEND_KWARGS,
+    )
     fig.savefig(f"{output_prefix}_venn.png", bbox_inches="tight")
     fig.savefig(f"{output_prefix}_venn.pdf", bbox_inches="tight")
 
