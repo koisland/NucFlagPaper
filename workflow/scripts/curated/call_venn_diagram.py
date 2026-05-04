@@ -1,4 +1,3 @@
-from matplotlib.patches import Patch
 import json
 import argparse
 import numpy as np
@@ -9,6 +8,7 @@ from typing import TextIO
 from intervaltree import Interval, IntervalTree
 from matplotlib.axes import Axes
 from matplotlib.colors import to_rgba
+from matplotlib.patches import Patch
 from matplotlib.patches import Rectangle
 from collections import defaultdict, Counter
 from upsetplot import UpSet, from_indicators
@@ -155,13 +155,12 @@ def main():
         [*COLORS.keys(), "value"]
     ]
 
-    fig, ax = plt.subplots(figsize=(16, 4), dpi=600, layout="tight")
+    fig, ax = plt.subplots(figsize=(30, 4), dpi=600, layout="tight")
     minimalize_ax(ax, remove_ticks=True)
 
     df_ovl_counts = from_indicators(list(COLORS.keys()), data=df_ovl_counts)
     upset = UpSet(
         data=df_ovl_counts,
-        show_counts=True,
         sum_over="value",
         sort_by="-degree",
         sort_categories_by="input",
@@ -175,6 +174,15 @@ def main():
 
     subplots = upset.plot(fig=fig)
 
+    # Redraw labels on totals since we need to draw intersections manually
+    ax_totals: Axes = subplots["totals"]
+    total_labels = []
+    total_bar_cont = ax_totals.containers[0]
+    for ptch in total_bar_cont.patches:
+        width = ptch.get_width()
+        total_labels.append(int(width))
+    ax_totals.bar_label(total_bar_cont, total_labels, fontsize=8)
+
     # Add stacked bar. We cannot use existing implementation because we don't have a grouping var.
     ax_intersections: Axes = subplots["intersections"]
     # Jank but use height of bar to determine which intersection
@@ -187,9 +195,11 @@ def main():
     for container in ax_intersections.containers:
         for ptch in container.patches:
             ptch: Rectangle
+            width = ptch.get_width()
             height = ptch.get_height()
-            x_coords.append(ptch.get_x())
-            widths.append(ptch.get_width())
+            # Offset by half width to fit both bars
+            x_coords.append(ptch.get_x() - (width / 2))
+            widths.append(width)
             intersection = height_to_intersection_map[height]
             non_homopolymer_height = nucflag_non_homopolymer_ovl_name_counts.get(
                 tuple(sorted(k for k, v in intersection.items() if v and k != "value")),
@@ -207,10 +217,11 @@ def main():
             ptch.remove()
             all_intersections.append(intersection)
 
+    x_coords = np.array(x_coords)
     bottom = np.zeros(len(rows_ovl_counts))
     for tool, color in COLORS.items():
         heights_tool = heights[tool]
-        ax_intersections.bar(
+        bars = ax_intersections.bar(
             x=x_coords,
             height=heights_tool,
             width=widths,
@@ -219,10 +230,23 @@ def main():
             align="edge",
         )
         bottom += heights_tool
+        # Only show label if top of bar
+        bar_labels = []
+        for cnt in bars.patches:
+            height = cnt.get_height()
+            if height == 0:
+                label = ""
+            else:
+                height = int(cnt.get_y() + height)
+                label = height if height in height_to_intersection_map else ""
+            bar_labels.append(label)
+
+        ax_intersections.bar_label(bars, bar_labels, fontsize=7.5)
 
     # Add final hatched bar
     non_homopolymer_bars = ax_intersections.bar(
-        x=x_coords,
+        # Offset by half width
+        x=x_coords + widths[0],
         height=non_homopolymer_heights,
         width=widths,
         color=COLORS["NucFlag v1.0"],
@@ -231,14 +255,20 @@ def main():
         align="edge",
     )
     non_homopolymer_bar_labels = [
-        cnt.get_height() if cnt.get_height() else "" for cnt in non_homopolymer_bars
+        int(cnt.get_height()) if cnt.get_height() else ""
+        for cnt in non_homopolymer_bars
     ]
-    ax_intersections.bar_label(non_homopolymer_bars, non_homopolymer_bar_labels)
+    ax_intersections.bar_label(
+        non_homopolymer_bars, non_homopolymer_bar_labels, fontsize=7.5
+    )
     ax_intersections.set_ylabel("# of error calls")
     ax_intersections.legend(
         loc="upper left",
-        handles=[Patch(edgecolor="black", fill=False, hatch="////")],
-        labels=["Non-homopolymers"],
+        handles=[
+            Patch(edgecolor="black", fill=False),
+            Patch(edgecolor="black", fill=False, hatch="////"),
+        ],
+        labels=["Total calls", "Non-homopolymer calls"],
         **LEGEND_KWARGS,
     )
     fig.savefig(f"{output_prefix}_venn.png", bbox_inches="tight")

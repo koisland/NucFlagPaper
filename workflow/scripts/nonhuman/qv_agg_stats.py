@@ -8,10 +8,12 @@ LEGEND_KWARGS = dict(
     handlelength=1.0,
     handleheight=1.0,
     borderaxespad=0,
+    edgecolor="black",
     title=None,
     fancybox=False,
     frameon=False,
 )
+plt.rcParams["font.family"] = "Arial"
 
 
 def main():
@@ -19,7 +21,7 @@ def main():
     ap.add_argument("-i", "--input_qvs", nargs="+", required=True)
     ap.add_argument("-r", "--reported_qvs", required=True)
     ap.add_argument("-l", "--labels", nargs="+", required=True)
-    ap.add_argument("-o", "--output", required=True)
+    ap.add_argument("-o", "--output_prefix", required=True)
     args = ap.parse_args()
 
     dfs_qv: list[pl.DataFrame] = []
@@ -40,9 +42,9 @@ def main():
             how="left",
             on=["chrom", "label"],
         )
-        .rename({"QV": "QV_NucFlag", "QV_right": "QV_Merqury"})
+        .rename({"QV": "NucFlag", "QV_right": "Merqury"})
         .unpivot(
-            on=["QV_NucFlag", "QV_Merqury"],
+            on=["NucFlag", "Merqury"],
             index=["chrom", "label"],
             variable_name="Method",
             value_name="QV",
@@ -65,17 +67,19 @@ def main():
             x="Method",
             y="QV",
             hue="label",
-            order=["QV_Merqury", "QV_NucFlag"],
+            order=["Merqury", "NucFlag"],
             palette="colorblind",
             ax=ax,
             legend="full",
         )
         for c in ax.containers:
             labels = [f"{round(v.get_height(), 1)}" for v in c]
-            ax.bar_label(c, labels=labels, label_type="edge")
+            ax.bar_label(c, labels=labels, label_type="edge", fontsize=12)
 
         ax.set_xlabel(None)
-        ax.set_title(f"Chromosome {chrom}")
+        ax.set_ylabel("QV", fontsize=14)
+        ax.set_title(f"Chromosome {chrom}", fontsize=18)
+        ax.tick_params(axis="both", which="major", labelsize=14)
 
         if i != 0:
             ax.get_legend().remove()
@@ -85,7 +89,10 @@ def main():
 
     ax_legend: Axes = axes[0]
     handles, labels = ax_legend.get_legend_handles_labels()
-    fig.legend(
+    for handle in handles:
+        handle.set_edgecolor("black")
+    fig_legend = plt.figure()
+    fig_legend.legend(
         labels=labels,
         handles=handles,
         loc="upper center",
@@ -94,7 +101,10 @@ def main():
         **LEGEND_KWARGS,
     )
     ax_legend.get_legend().remove()
-    fig.savefig(args.output, bbox_inches="tight")
+    fig.savefig(f"{args.output_prefix}.pdf", bbox_inches="tight", dpi=300)
+    fig.savefig(f"{args.output_prefix}.png", bbox_inches="tight", dpi=300)
+    fig_legend.savefig(f"{args.output_prefix}_legend.pdf", bbox_inches="tight", dpi=300)
+    fig_legend.savefig(f"{args.output_prefix}_legend.png", bbox_inches="tight", dpi=300)
 
 
 if __name__ == "__main__":

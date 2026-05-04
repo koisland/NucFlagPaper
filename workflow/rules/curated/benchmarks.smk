@@ -96,7 +96,8 @@ rule plot_stats_f1_all:
         -i {input.summaries} \
         -l {params.labels} \
         -c {params.colors} \
-        -o {params.output_prefix} > {output.tsv}
+        -o {params.output_prefix} \
+        -s "(14, 5)" > {output.tsv}
         """
 
 

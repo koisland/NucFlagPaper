@@ -65,7 +65,7 @@ nf_config = {
     "output_dir": OUTPUT_DIR,
     "output_plots": False,
     "output_pileup": False,
-    "output_ideogram": True,
+    "output_ideogram": False,
     "logs_dir": LOG_DIR,
     "benchmarks_dir": BENCHMARK_DIR,
     "threads_aln": 12,
@@ -138,65 +138,31 @@ module align_asm_to_ref:
 use rule * from align_asm_to_ref as asm_ref_*
 
 
-# Generate mismatch only ideograms with centromere ideogram
-rule generate_ideogram_mismatch:
-    input:
-        bed_cen=lambda wc: DATA[wc.sm.split("_")[0]]["bed_centromeres"],
-        bed_misassemblies=rules.check_asm_nucflag.output.misassemblies,
-        fai=lambda wc: expand(
-            rules.download_data.output.data, sm=wc.sm.split("_")[0], dtype="assembly"
-        )[0]
-        + ".fai",
-    output:
-        ideogram=multiext(
-            join(OUTPUT_DIR, "{sm}_only_mismatch_ideogram"), ".png", ".pdf"
-        ),
-    conda:
-        "../Snakemake-NucFlag/workflow/env/nucflag.yaml"
-    params:
-        output_prefix=lambda wc, output: splitext(output[0])[0],
-    shell:
-        """
-        nucflag ideogram \
-        -i <(awk -v OFS="\\t" '{{
-            if ($4 != "mismatch" && NR > 1 ) {{
-                $4="correct";
-                $9="206,206,206"
-            }};
-            print
-        }}' {input.bed_misassemblies}) \
-        -c <(join {input.bed_cen} {input.fai} | \
-        awk -v OFS="\\t" '{{
-            len=$3-$2;
-            midpt=int($2+(len/2));
-            print $1, 0, $2, ".", "gneg";
-            print $1, $2, midpt, ".", "acen";
-            print $1, midpt, $3, ".", "acen";
-            print $1, $3, $4, ".", "gneg"
-        }}') \
-        -o {params.output_prefix}
-        """
-
-
 rule generate_ideogram_all:
     input:
-        bed_cen=lambda wc: DATA[wc.sm.split("_")[0]]["bed_centromeres"],
-        bed_misassemblies=rules.check_asm_nucflag.output.misassemblies,
-        fai=lambda wc: expand(
-            rules.download_data.output.data, sm=wc.sm.split("_")[0], dtype="assembly"
-        )[0]
-        + ".fai",
+        bed_cen=[DATA[sm.split("_")[0]]["bed_centromeres"] for sm in SAMPLES_HIFI],
+        bed_misassemblies=expand(
+            rules.check_asm_nucflag.output.misassemblies, sm=SAMPLES_HIFI
+        ),
+        fai=[
+            expand(
+                rules.download_data.output.data, sm=sm.split("_")[0], dtype="assembly"
+            )[0]
+            + ".fai"
+            for sm in SAMPLES_HIFI
+        ],
     output:
-        ideogram=multiext(join(OUTPUT_DIR, "{sm}_all_ideogram"), ".png", ".pdf"),
+        ideogram=multiext(join(OUTPUT_DIR, "all_ideogram"), ".png", ".pdf"),
     conda:
-        "../Snakemake-NucFlag/workflow/env/nucflag.yaml"
+        "../../envs/tools.yaml"
     params:
+        script="workflow/scripts/nonhuman/draw_all_ideogram.py",
         output_prefix=lambda wc, output: splitext(output[0])[0],
     shell:
         """
-        nucflag ideogram \
-        -i {input.bed_misassemblies} \
-        -c <(join {input.bed_cen} {input.fai} | \
+        python {params.script} \
+        -i <(cat {input.bed_misassemblies}) \
+        -c <(join <(cat {input.bed_cen}) <(cat {input.fai}) | \
         awk -v OFS="\\t" '{{
             len=$3-$2;
             midpt=int($2+(len/2));
@@ -205,6 +171,7 @@ rule generate_ideogram_all:
             print $1, midpt, $3, ".", "acen";
             print $1, $3, $4, ".", "gneg"
         }}') \
+        -r <(awk -v OFS="\\t" '{{ print $1, "Chromosome "FNR }}' {input.bed_cen}) \
         -o {params.output_prefix}
         """
 
@@ -214,14 +181,19 @@ rule agg_qv_stats_against_reported:
         bed_qv=expand(rules.calculate_qv.output, sm=SAMPLES_HIFI),
         reported_qv="data/nonhuman/all_qv.tsv",
     output:
-        join(
-            OUTPUT_DIR,
-            "qv_stats_against_reported.png",
+        multiext(
+            join(
+                OUTPUT_DIR,
+                "qv_stats_against_reported",
+            ),
+            ".png",
+            ".pdf",
         ),
     conda:
         "../../envs/tools.yaml"
     params:
         script="workflow/scripts/nonhuman/qv_agg_stats.py",
+        output_prefix=lambda wc, output: splitext(output[0])[0],
         labels=" ".join(DATA.keys()),
     shell:
         """
@@ -229,7 +201,7 @@ rule agg_qv_stats_against_reported:
         -i {input.bed_qv} \
         -l {params.labels} \
         -r {input.reported_qv} \
-        -o {output}
+        -o {params.output_prefix}
         """
 
 
@@ -266,7 +238,6 @@ rule all:
         rules.nucflag.input,
         expand(rules.calculate_qv.output, sm=SAMPLES_HIFI),
         expand(rules.asm_ref_SafFire.output.bed, ref=REFERENCE, sm=SAMPLES_NO_REF),
-        expand(rules.generate_ideogram_mismatch.output, sm=SAMPLES_HIFI),
-        expand(rules.generate_ideogram_all.output, sm=SAMPLES_HIFI),
+        rules.generate_ideogram_all.output,
         rules.agg_calls_cen.output,
         rules.agg_qv_stats_against_reported.output,

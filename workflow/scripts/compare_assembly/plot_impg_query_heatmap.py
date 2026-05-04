@@ -28,7 +28,7 @@ TYPES = (
     "other_repeat",
     "softclip",
 )
-CMAP = colormaps.get_cmap("OrRd")
+CMAP = colormaps.get_cmap("Greens")
 NO_OVL_COLOR = "gray"
 CTG_BRK_COLOR = "black"
 NORM = matplotlib.colors.Normalize(vmin=0, vmax=100)
@@ -83,6 +83,7 @@ def draw_perc_ovl_legend(fig: plt.Figure):
         ScalarMappable(norm=norm, cmap=CMAP),
         cax=ax,
         orientation="horizontal",
+        extend="neither",
     )
 
     ax.tick_params(axis="both", which="major", labelsize=14)

@@ -170,7 +170,7 @@ def main():
 
                 if col == 0:
                     ax.set_ylabel(
-                        f"{metric.capitalize()} (%)\n({DTYPE_NAMES[dtype]})",
+                        f"{metric.capitalize()} (%)\n{DTYPE_NAMES[dtype]}",
                         rotation=0,
                         ha="right",
                         ma="center",
