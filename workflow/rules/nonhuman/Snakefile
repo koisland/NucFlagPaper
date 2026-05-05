@@ -140,16 +140,14 @@ use rule * from align_asm_to_ref as asm_ref_*
 
 rule generate_ideogram_all:
     input:
-        bed_cen=[DATA[sm.split("_")[0]]["bed_centromeres"] for sm in SAMPLES_HIFI],
+        bed_cen=[DATA[sm]["bed_centromeres"] for sm in DATA.keys()],
         bed_misassemblies=expand(
             rules.check_asm_nucflag.output.misassemblies, sm=SAMPLES_HIFI
         ),
         fai=[
-            expand(
-                rules.download_data.output.data, sm=sm.split("_")[0], dtype="assembly"
-            )[0]
+            expand(rules.download_data.output.data, sm=sm, dtype="assembly")[0]
             + ".fai"
-            for sm in SAMPLES_HIFI
+            for sm in DATA.keys()
         ],
     output:
         ideogram=multiext(join(OUTPUT_DIR, "all_ideogram"), ".png", ".pdf"),
@@ -158,11 +156,17 @@ rule generate_ideogram_all:
     params:
         script="workflow/scripts/nonhuman/draw_all_ideogram.py",
         output_prefix=lambda wc, output: splitext(output[0])[0],
+        labels=" ".join(DATA.keys()),
+        colors=" ".join(f"'{DATA[sm].get("color")}'" for sm in DATA.keys()),
     shell:
         """
         python {params.script} \
-        -i <(cat {input.bed_misassemblies}) \
-        -c <(join <(cat {input.bed_cen}) <(cat {input.fai}) | \
+        -i <(awk -v OFS="\\t" '{{
+                # Add label to groupby
+                match(FILENAME, "/([^/]*)_hifi_misassemblies.bed", arr);
+                print $0, arr[1]
+            }}' {input.bed_misassemblies}) \
+        -y <(join <(cat {input.bed_cen}) <(cat {input.fai}) | \
         awk -v OFS="\\t" '{{
             len=$3-$2;
             midpt=int($2+(len/2));
@@ -172,6 +176,8 @@ rule generate_ideogram_all:
             print $1, $3, $4, ".", "gneg"
         }}') \
         -r <(awk -v OFS="\\t" '{{ print $1, "Chromosome "FNR }}' {input.bed_cen}) \
+        -c {params.colors} \
+        -l {params.labels} \
         -o {params.output_prefix}
         """
 
@@ -195,11 +201,13 @@ rule agg_qv_stats_against_reported:
         script="workflow/scripts/nonhuman/qv_agg_stats.py",
         output_prefix=lambda wc, output: splitext(output[0])[0],
         labels=" ".join(DATA.keys()),
+        colors=" ".join(f"'{DATA[sm].get("color")}'" for sm in DATA.keys()),
     shell:
         """
         python {params.script} \
         -i {input.bed_qv} \
         -l {params.labels} \
+        -c {params.colors} \
         -r {input.reported_qv} \
         -o {params.output_prefix}
         """

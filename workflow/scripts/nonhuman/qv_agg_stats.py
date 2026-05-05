@@ -21,6 +21,7 @@ def main():
     ap.add_argument("-i", "--input_qvs", nargs="+", required=True)
     ap.add_argument("-r", "--reported_qvs", required=True)
     ap.add_argument("-l", "--labels", nargs="+", required=True)
+    ap.add_argument("-c", "--colors", nargs="+", required=True)
     ap.add_argument("-o", "--output_prefix", required=True)
     args = ap.parse_args()
 
@@ -50,6 +51,7 @@ def main():
             value_name="QV",
         )
     )
+    colors = dict(zip(args.labels, args.colors))
     fig, axes = plt.subplots(
         nrows=1,
         ncols=df_qv["chrom"].n_unique(),
@@ -68,7 +70,7 @@ def main():
             y="QV",
             hue="label",
             order=["Merqury", "NucFlag"],
-            palette="colorblind",
+            palette=colors,
             ax=ax,
             legend="full",
         )
