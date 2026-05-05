@@ -10,6 +10,10 @@ BENCHMARK_DIR = config["benchmarks_dir"]
 # {sample: {dtype: { R1: [], R2: []}}}
 DATA = defaultdict(lambda: defaultdict(dict))
 RELEASES = ["R1", "R2"]
+SM_METADATA = join("data", "compare_hprc", "hprc_metadata.tsv")
+# From other part of workflow
+ASM_CHM13 = join(OUTPUT_DIR, "..", "assembly", "reference", "chm13v2.0.fa.gz")
+BED_CHM13_SMN = join("data", "compare_hprc", "chm13v2.0_smn_1mbp_slop.bed")
 
 with open(config["manifest"]) as fh:
     # Skip header.
@@ -120,12 +124,14 @@ rule plot_qv_comparison:
             sm=DATA.keys(),
             release="R2",
         ),
+        metadata=SM_METADATA,
     output:
         qv=join(OUTPUT_DIR, "plots", "hprc_qv_comparison.tsv"),
-        dt_qv=join(OUTPUT_DIR, "plots", "hprc_dt_qv_comparison.tsv"),
+        qv_summary=join(OUTPUT_DIR, "plots", "hprc_qv_comparison_summary.tsv"),
         png=join(OUTPUT_DIR, "plots", "hprc_qv_comparison.png"),
     params:
         script="workflow/scripts/compare_hprc/plot_qv_compare.py",
+        output_prefix=lambda wc, output: splitext(output.qv)[0],
     conda:
         "../../envs/tools.yaml"
     shell:
@@ -133,9 +139,8 @@ rule plot_qv_comparison:
         python {params.script} \
         -a <(cat {input.qv_r1}) \
         -b <(cat {input.qv_r2}) \
-        -d {output.dt_qv} \
-        -o {output.qv} \
-        -p {output.png}
+        -m {input.metadata} \
+        -o {params.output_prefix}
         """
 
 
@@ -179,26 +184,6 @@ rule plot_err_comparison:
         """
 
 
-# UL ont coverage increases by 24.0x.
-rule plot_ul_ont:
-    input:
-        mdata_r1="data/compare_hprc/hprc_r1_data.tsv.gz",
-        mdata_r2="data/compare_hprc/hprc_r2_data.csv.gz",
-    output:
-        plot=join(OUTPUT_DIR, "plots", "hprc_ul_ont.png"),
-    params:
-        script="workflow/scripts/compare_hprc/summarize_ul_ont_diff.py",
-    conda:
-        "../../envs/tools.yaml"
-    shell:
-        """
-        python {params.script} \
-        {input.mdata_r1} \
-        {input.mdata_r2} \
-        {output.plot}
-        """
-
-
 include: "smn.smk"
 
 
@@ -214,5 +199,4 @@ rule all:
         rules.plot_qv_comparison.output,
         rules.plot_err_comparison.output,
         rules.smn_all.input,
-        rules.plot_ul_ont.output,
     default_target: True

@@ -1,9 +1,3 @@
-# From other part of workflow
-ASM_CHM13 = join(OUTPUT_DIR, "..", "assembly", "reference", "chm13v2.0.fa.gz")
-BED_CHM13_SMN = (join("data", "compare_hprc", "chm13v2.0_smn_1mbp_slop.bed"),)
-SM_METADATA = (join("data", "compare_hprc", "hprc_metadata.tsv"),)
-
-
 def get_sms_release(*releases: str) -> Iterator[str]:
     yield from (f"{sm}_{release}" for sm in DATA.keys() for release in releases)
 

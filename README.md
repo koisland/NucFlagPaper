@@ -3,7 +3,7 @@ Code for NucFlag paper. WIP.
 
 ### Getting started
 ```bash
-conda create --name NucFlagPaper bioconda::snakemake
+conda create --name NucFlagPaper bioconda::snakemake==9.5.0
 ```
 
 ```bash

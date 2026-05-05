@@ -3,8 +3,8 @@ from snakemake.io import Wildcards
 
 rule overlap_annotation_data:
     input:
-        censat=rules.convert_to_bed.output.censat,
-        segdup=rules.convert_to_bed.output.segdups,
+        censat=rules.convert_annotations_to_bed.output.censat,
+        segdup=rules.convert_annotations_to_bed.output.segdups,
         calls=get_bed_files,
     output:
         censat=join(OUTPUT_DIR, "sequence_ctx", "{tool}_{version}_censat.bed"),

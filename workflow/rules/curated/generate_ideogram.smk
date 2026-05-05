@@ -20,7 +20,7 @@ rule download_annotation_data:
         """
 
 
-rule convert_to_bed:
+rule convert_annotations_to_bed:
     input:
         segdups=rules.download_annotation_data.output.segdups,
         censat=rules.download_annotation_data.output.censat,
@@ -43,10 +43,74 @@ rule convert_to_bed:
         """
 
 
+saffire_cfg = {
+    "ref": {
+        "CHM13v2.0": join(OUTPUT_DIR, "..", "assembly", "reference", "chm13v2.0.fa.gz")
+    },
+    "sm": {
+        "HG002v1.0.1": expand(rules.download_curated_asm.output.fa, version="v1.0.1")
+    },
+    "temp_dir": join(IDEOGRAM_OUTPUT_DIR, "saffire", "temp"),
+    "output_dir": join(IDEOGRAM_OUTPUT_DIR, "saffire"),
+    "logs_dir": join(IDEOGRAM_OUTPUT_DIR, "logs", "saffire"),
+    "benchmarks_dir": join(IDEOGRAM_OUTPUT_DIR, "benchmarks", "saffire"),
+    "aln_threads": 8,
+    "aln_mem": "60GB",
+    "mm2_opts": "-x asm20 --secondary=no -K 8G",
+}
+
+
+module liftover_align_asm_to_ref:
+    snakefile:
+        "../asm-to-reference-alignment/workflow/Snakefile"
+    config:
+        saffire_cfg
+
+
+use rule * from liftover_align_asm_to_ref as liftover_from_chm13_*
+
+
+rule liftover_from_chm13_paf2chain:
+    input:
+        rules.liftover_from_chm13_bam_to_paf.output,
+    output:
+        join(IDEOGRAM_OUTPUT_DIR, "saffire", "{ref}", "chain", "{sm}.chain"),
+    conda:
+        "../../envs/compare_assembly.yaml"
+    shell:
+        """
+        paf2chain -i {input} > {output}
+        """
+
+
+# Cytobands for HG002 v1.0.1 are incomplete
+# Cytobands for HG002 v1.1 chrY are likely incorrect in Yq12.
+# We liftover and manually correct the Yq12
+rule liftover_cytobands_from_chm13:
+    input:
+        chain=rules.liftover_from_chm13_paf2chain.output,
+        cytobands_chm13=join(
+            OUTPUT_DIR, "..", "assembly", "annot", "chm13v2.0_cytobands_allchrs.bed"
+        ),
+    output:
+        cytobands=join(IDEOGRAM_OUTPUT_DIR, "{ref}_{sm}_cytobands.bed"),
+        cytobands_unmapped=join(
+            IDEOGRAM_OUTPUT_DIR, "{ref}_{sm}_cytobands_unmapped.bed"
+        ),
+    conda:
+        "../../envs/compare_assembly.yaml"
+    shell:
+        """
+        liftOver -multiple {input.cytobands_chm13} {input.chain} {output.cytobands}.tmp {output.cytobands_unmapped}
+        sort -k1,1 -k2,2n {output.cytobands}.tmp > {output.cytobands}
+        rm -f {output.cytobands}.tmp
+        """
+
+
 rule plot_ideogram:
     input:
         script="workflow/scripts/metrics/plot_curated_ideogram.py",
-        cytobands=rules.convert_to_bed.output.cytoband,
+        cytobands=rules.convert_annotations_to_bed.output.cytoband,
         curated=expand(rules.convert_vcf_to_bed.output, version="v1.0.1"),
         nucflag_calls=expand(
             rules.calculate_precision_recall.output.missed_calls_dir,
@@ -98,7 +162,7 @@ rule plot_ideogram:
 rule plot_ideogram_chrom:
     input:
         script="workflow/scripts/metrics/plot_curated_ideogram_chrom.py",
-        cytobands=rules.convert_to_bed.output.cytoband,
+        cytobands=rules.convert_annotations_to_bed.output.cytoband,
         curated=expand(rules.convert_vcf_to_bed.output, version=f"v1.0.1"),
         nucflag_calls=expand(
             rules.calculate_precision_recall.output.missed_calls_dir,
@@ -120,8 +184,8 @@ rule plot_ideogram_chrom:
             tool="deepvariant",
             version="v1.0.1",
         ),
-        segdups=rules.convert_to_bed.output.segdups,
-        censat=rules.convert_to_bed.output.censat,
+        segdups=rules.convert_annotations_to_bed.output.segdups,
+        censat=rules.convert_annotations_to_bed.output.censat,
     wildcard_constraints:
         chrom="|".join(CHROMS),
     output:
@@ -161,5 +225,11 @@ rule generate_ideogram:
             rules.plot_ideogram_chrom.output,
             chrom=[chrom for chrom in CHROMS if chrom != "all"],
             cond=["fp", "none"],
+        ),
+        # Liftover CHM13 cytobands to fix chrY Yq12 manually.
+        expand(
+            rules.liftover_cytobands_from_chm13.output,
+            ref="CHM13v2.0",
+            sm="HG002v1.0.1",
         ),
     default_target: True
