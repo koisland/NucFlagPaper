@@ -1,11 +1,14 @@
 import argparse
 import numpy as np
 import polars as pl
+import seaborn as sns
 import matplotlib.pyplot as plt
 import matplotlib.patheffects as pe
 
+from typing import Literal
 from matplotlib.patches import Patch
 from matplotlib.colors import rgb2hex
+from matplotlib.axes import Axes
 
 COLS_CALLS = (
     "chrom",
@@ -23,42 +26,121 @@ LEGEND_KWARGS = dict(
     handleheight=1.0,
     borderaxespad=0,
     title=None,
-    loc="center left",
-    bbox_to_anchor=(1.0, 0.5),
     fancybox=False,
     frameon=False,
 )
 DIPLOID_GENOME_SIZE = 6_200_000_000
+AFR_POP_LABELS = {"ACB", "GWD", "ESN", "MKK", "LWK", "ASL", "YRI", "MSL", "ASW"}
+POP_GROUP_COLORS = {
+    "AFR": "orange",
+    "Non-AFR": "gray",
+}
+LARGE_ERRORS = {
+    "false_dup",
+    "misjoin",
+    "collapse",
+    "scaffold",
+    "softclip",
+}
+SMALL_ERRORS = {
+    "insertion",
+    "deletion",
+    "homopolymer",
+    "dinucleotide",
+    "simple_repeat",
+    "other_repeat",
+    "mismatch",
+    "low_quality",
+    "het_or_mismap",
+}
+plt.rcParams["font.family"] = "Arial"
 
 
-def draw_combined_err_diff(df: pl.DataFrame, outfile: str, name_colors: dict[str, str]):
-    name_fig, ax_fig = plt.subplots(layout="constrained", figsize=(8, 8))
-    name_bars = ax_fig.bar(
-        x=df["name"],
-        height=df["diff"],
-        facecolor=[name_colors[name] for name in df["name"]],
-        edgecolor="black",
+def draw_combined_err_diff(
+    df: pl.DataFrame,
+    output_prefix: str,
+    name_colors: dict[str, str],
+    include_all: bool = False,
+    by: Literal["count", "length"] = "count",
+    log_scale: bool = False,
+):
+    name_fig, ax_fig = plt.subplots(layout="constrained", figsize=(12, 10))
+    ax_fig: Axes
+    if by == "count":
+        col = "diff_count"
+        ylabel = "Difference in number of calls between R2 and R1"
+    else:
+        col = "diff"
+        ylabel = "Difference in length of calls between R2 and R1 (Mbp)"
+
+    df_filtered = df
+    if include_all:
+        x_order = ["all", *LARGE_ERRORS, *SMALL_ERRORS]
+    else:
+        x_order = [*LARGE_ERRORS, *SMALL_ERRORS]
+        df_filtered = df.filter(pl.col("name").ne("all"))
+
+    sns.barplot(
+        data=df_filtered,
+        x="name",
+        y=col,
+        hue="pop_group",
+        palette=POP_GROUP_COLORS,
+        order=x_order,
+        legend="full",
+        hue_order=POP_GROUP_COLORS.keys(),
+        ax=ax_fig,
     )
-    ax_fig.bar_label(
-        name_bars,
-        fontsize=8,
-        fmt=lambda length: f"{length / 1_000_000:.1f}",
-        label_type="center",
-        path_effects=[pe.withStroke(linewidth=2.0, foreground="white")],
-        padding=3,
-    )
-    ax_fig.yaxis.set_major_formatter(lambda x, _: f"{x / 1_000_000:.1f}")
-    ax_fig.tick_params(axis="x", labelrotation=45)
+    for cont in ax_fig.containers:
+        if by == "length":
+            ax_fig.bar_label(
+                cont,
+                fontsize=12,
+                fmt=lambda length: f"{length / 1_000_000:.1f}",
+                label_type="center",
+                path_effects=[pe.withStroke(linewidth=2.0, foreground="white")],
+                padding=3,
+            )
+        else:
+            ax_fig.bar_label(
+                cont,
+                fontsize=12,
+                label_type="edge",
+                path_effects=[pe.withStroke(linewidth=2.0, foreground="white")],
+                padding=3,
+            )
+
+    # Make symmetric
+    ylim_max = max(abs(df_filtered[col].min()), abs(df_filtered[col].max()))
+    # Add 10% of max as buffer
+    ylim_max += 0.1 * ylim_max
+    ax_fig.set_ylim(-ylim_max, ylim_max)
+    if log_scale:
+        ax_fig.set_yscale("symlog")
+
+    if by == "length":
+        ax_fig.yaxis.set_major_formatter(lambda x, _: f"{x / 1_000_000:.1f}")
+
+    ax_fig.tick_params(axis="both", which="major", labelsize=18)
     ax_fig.margins(x=0.01)
-    ax_fig.set_ylabel("Combined length (Mbp)")
+    ax_fig.set_xlabel(None)
+    ax_fig.set_ylabel(ylabel, fontsize=18)
     for spine in ("top", "right"):
         ax_fig.spines[spine].set_visible(False)
 
     for label in ax_fig.get_xticklabels():
-        label.set_color(name_colors[label.get_text()])
+        label.set_color(name_colors.get(label.get_text(), "gray"))
         label.set_path_effects([pe.withStroke(linewidth=0.2, foreground="black")])
+        label.set_rotation(45)
+        label.set_horizontalalignment("right")
+        label.set_rotation_mode("anchor")
 
-    name_fig.savefig(outfile, bbox_inches="tight", dpi=300)
+    sns.move_legend(
+        ax_fig, loc="upper right", title_fontsize=24, fontsize=18, **LEGEND_KWARGS
+    )
+
+    name_fig.savefig(f"{output_prefix}_combined.png", bbox_inches="tight", dpi=300)
+    name_fig.savefig(f"{output_prefix}_combined.pdf", bbox_inches="tight", dpi=300)
 
 
 def main():
@@ -75,11 +157,8 @@ def main():
         type=str,
         help="Input calls for group b. Expects PanSN naming spec with # as delimiter.",
     )
-    ap.add_argument("-o", "--output", default="output.png")
-    ap.add_argument("-n", "--output_name", default="output_name.png")
-    ap.add_argument("-nd", "--output_name_diff", default="out_name_diff.tsv")
-    ap.add_argument("-sd", "--output_sm_diff", default="out_sm_diff.tsv")
-    ap.add_argument("-snd", "--output_sm_name_diff", default="out_sm_name_diff.tsv")
+    ap.add_argument("-m", "--metadata", type=str, help="Input sample metadata TSV.")
+    ap.add_argument("-o", "--output_prefix", type=str, default="out")
 
     args = ap.parse_args()
 
@@ -113,10 +192,20 @@ def main():
         .with_columns(label=pl.lit("b"), length=pl.col("end") - pl.col("start"))
         .filter(pl.col("name").ne(pl.lit("correct")))
     )
+    df_metadata = pl.read_csv(
+        args.metadata, separator="\t", has_header=True
+    ).with_columns(
+        pop_group=pl.when(pl.col("Population Abbreviation").is_in(AFR_POP_LABELS))
+        .then(pl.lit("AFR"))
+        .otherwise(pl.lit("Non-AFR"))
+    )
+    afr_samples = set(
+        df_metadata.filter(pl.col("pop_group").eq(pl.lit("AFR")))["Sample ID"]
+    )
 
     df_all = pl.concat((df_a, df_b))
     df_grp_no_hap = df_all.group_by(["sample", "label", "name"]).agg(
-        pl.col("length").sum()
+        length=pl.col("length").sum(), count=pl.col("length").count().cast(pl.Int32)
     )
     df_grp_no_hap_wide = (
         df_grp_no_hap.pivot(on="name", index=("sample", "label"), values="length")
@@ -136,6 +225,7 @@ def main():
     }
 
     fig, ax = plt.subplots(layout="constrained", figsize=(24, 6))
+    ax: Axes
     width = 0.3
     multiplier_adj = 1.1
 
@@ -181,43 +271,123 @@ def main():
             Patch(edgecolor="black", facecolor=color)
             for color in reversed(name_colors.values())
         ],
+        loc="center left",
+        bbox_to_anchor=(1.0, 0.5),
         **LEGEND_KWARGS,
     )
-    # Nudge xtick slightly so centered.
+    # Nudge xtick slightly so centered
+    # Set sample names
     ax.set_xticks(label_samples + 0.15, unique_samples)
 
     for spine in ("top", "right"):
         ax.spines[spine].set_visible(False)
 
-    ax.tick_params(axis="x", labelrotation=45)
+    # Color by population group and rotate
+    for lbl in ax.xaxis.get_majorticklabels():
+        lbl.set_rotation(45)
+        lbl.set_horizontalalignment("right")
+        lbl.set_rotation_mode("anchor")
+        color = POP_GROUP_COLORS["AFR" if lbl.get_text() in afr_samples else "Non-AFR"]
+        lbl.set_color(color)
 
     # Just eyeballing
     ax.yaxis.set_major_formatter(lambda x, _: f"{x / 1_000_000:.1f}")
     ax.set_ylabel("Cumulative length (Mbp)")
-    fig.savefig(args.output, bbox_inches="tight", dpi=150)
+    fig.savefig(f"{args.output_prefix}.pdf", bbox_inches="tight", dpi=300)
+    fig.savefig(f"{args.output_prefix}.png", bbox_inches="tight", dpi=300)
 
     # Agg difference in called bases by sample and sample/name
     df_cmp_ab = (
         df_grp_no_hap.group_by(["sample", "name", "label"])
-        .agg(pl.col("length").sum())
+        .agg(
+            length=pl.col("length").sum(),
+            count=pl.col("count").sum(),
+        )
         .pivot(on="label", index=["sample", "name"])
-        .select("sample", "name", "a", "b")
-        .with_columns(diff=pl.col("b") - pl.col("a"))
+        .select("sample", "name", "length_a", "length_b", "count_a", "count_b")
+        .with_columns(
+            diff=pl.col("length_b") - pl.col("length_a"),
+            diff_count=pl.col("count_b") - pl.col("count_a"),
+        )
+        .join(df_metadata, left_on="sample", right_on="Sample ID", how="left")
     )
     df_cmp_name_ab = (
-        df_cmp_ab.group_by(["name"])
-        .agg(a=pl.col("a").sum(), b=pl.col("b").sum())
-        .with_columns(diff=pl.col("b") - pl.col("a"))
+        df_cmp_ab.group_by(["name", "pop_group"])
+        .agg(
+            a=pl.col("length_a").sum(),
+            a_count=pl.col("count_a").sum(),
+            b=pl.col("length_b").sum(),
+            b_count=pl.col("count_b").sum(),
+        )
+        .with_columns(
+            diff=pl.col("b") - pl.col("a"),
+            diff_count=pl.col("b_count") - pl.col("a_count"),
+        )
         .sort(by="name")
+    )
+    df_cmp_name_ab = pl.concat(
+        [
+            df_cmp_name_ab,
+            df_cmp_name_ab.group_by("pop_group")
+            .agg(
+                pl.col("a").sum(),
+                pl.col("a_count").sum(),
+                pl.col("b").sum(),
+                pl.col("b_count").sum(),
+                pl.col("diff").sum(),
+                pl.col("diff_count").sum(),
+                name=pl.lit("all"),
+            )
+            .select(
+                "name",
+                "pop_group",
+                "a",
+                "a_count",
+                "b",
+                "b_count",
+                "diff",
+                "diff_count",
+            ),
+        ]
     )
     df_cmp_sm_ab = (
         df_cmp_ab.group_by(["sample"])
-        .agg(a=pl.col("a").sum(), b=pl.col("b").sum())
+        .agg(a=pl.col("length_a").sum(), b=pl.col("length_b").sum())
         .with_columns(diff=pl.col("b") - pl.col("a"))
     )
 
+    # Break by AFR/Non-AFR
     draw_combined_err_diff(
-        df_cmp_name_ab, outfile=args.output_name, name_colors=name_colors
+        df_cmp_name_ab,
+        output_prefix=f"{args.output_prefix}_all_count",
+        name_colors=name_colors,
+        by="count",
+        include_all=True,
+        log_scale=True,
+    )
+    draw_combined_err_diff(
+        df_cmp_name_ab,
+        output_prefix=f"{args.output_prefix}_all_length",
+        name_colors=name_colors,
+        by="length",
+        include_all=True,
+        log_scale=False,
+    )
+    draw_combined_err_diff(
+        df_cmp_name_ab,
+        output_prefix=f"{args.output_prefix}_count",
+        name_colors=name_colors,
+        by="count",
+        include_all=False,
+        log_scale=True,
+    )
+    draw_combined_err_diff(
+        df_cmp_name_ab,
+        output_prefix=f"{args.output_prefix}_length",
+        name_colors=name_colors,
+        by="length",
+        include_all=False,
+        log_scale=False,
     )
     median_diff_called_bases = df_cmp_sm_ab["diff"].median()
     perc_median_diff_called_bases = (
@@ -226,9 +396,9 @@ def main():
     print(
         f"Median reduction in called bases (Mbp) from a to b: {median_diff_called_bases} ({perc_median_diff_called_bases}%)"
     )
-    df_cmp_ab.write_csv(args.output_sm_name_diff, separator="\t")
-    df_cmp_sm_ab.write_csv(args.output_sm_diff, separator="\t")
-    df_cmp_name_ab.write_csv(args.output_name_diff, separator="\t")
+    df_cmp_ab.write_csv(f"{args.output_prefix}_sm_name_diff.tsv", separator="\t")
+    df_cmp_sm_ab.write_csv(f"{args.output_prefix}_sm_diff.tsv", separator="\t")
+    df_cmp_name_ab.write_csv(f"{args.output_prefix}_name_diff.tsv", separator="\t")
 
 
 if __name__ == "__main__":

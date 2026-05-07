@@ -7,6 +7,7 @@ import matplotlib.pyplot as plt
 import matplotlib.patheffects as pe
 
 from matplotlib.axes import Axes
+from scipy.signal import find_peaks
 
 COLS_QV = ("chrom", "start", "end", "qv", "bp_err", "bp_correct")
 COLS_CTG_MAP = ("chrom_y", "chrom_x", "bp_match")
@@ -41,10 +42,10 @@ def main():
         help="QV for group b. Expects PanSN naming spec with # as delimiter.",
     )
     ap.add_argument(
-        "-la", "--label_a", type=str, default="HPRC Release 1", help="Label for a."
+        "-la", "--label_a", type=str, default="Release 1", help="Label for a."
     )
     ap.add_argument(
-        "-lb", "--label_b", type=str, default="HRPC Release 2", help="Label for b."
+        "-lb", "--label_b", type=str, default="Release 2", help="Label for b."
     )
     ap.add_argument("-ca", "--color_a", type=str, default="red", help="Color for a.")
     ap.add_argument("-cb", "--color_b", type=str, default="blue", help="Color for b.")
@@ -84,49 +85,75 @@ def main():
         )
         .unnest("mtch")
     )
-    labels = {
-        "a": args.label_a,
-        "b": args.label_b,
-    }
-    colors = {
-        args.label_a: args.color_a,
-        args.label_b: args.color_b,
-    }
 
+    # Split into groups by release and AFR/Non-AFR
+    colors = {
+        0: args.color_a,
+        1: args.color_a,
+        2: args.color_b,
+        3: args.color_b,
+    }
+    labels = {
+        0: f"{args.label_a}\nAFR",
+        1: f"{args.label_a}\nNon-AFR",
+        2: f"{args.label_b}\nAFR",
+        3: f"{args.label_b}\nNon-AFR",
+    }
     df_metadata = pl.read_csv(args.metadata, separator="\t", has_header=True)
     df_qvs = pl.concat([df_qv_a, df_qv_b]).join(
         df_metadata, left_on="sample", right_on="Sample ID", how="left"
     )
-    df_qvs = df_qvs.with_columns(
-        # Set infinite values to median
-        pl.when(pl.col("qv").is_infinite())
-        .then(pl.col("qv").median().over(["sample", "hap", "lbl"]))
-        .otherwise(pl.col("qv"))
-        .alias("qv"),
-        pl.when(pl.col("Population Abbreviation").is_in(AFR_POP_LABELS))
-        .then(pl.lit("AFR"))
-        .otherwise(pl.lit("Non-AFR"))
-        .alias("Sample"),
-        ((pl.col("end") - pl.col("start")) / 1_000_000).alias("Length (Mbp)"),
-        # make a numerical column and add some jitter
-        # https://stackoverflow.com/a/75541978
-        x=pl.when(pl.col("lbl").eq("a")).then(pl.lit(0)).otherwise(pl.lit(1))
-        + np.random.uniform(-0.2, 0.2, len(df_qvs)),
-        lbl=pl.col("lbl").replace(labels),
+    df_qvs = (
+        df_qvs.with_columns(
+            # Set infinite values to median
+            pl.when(pl.col("qv").is_infinite())
+            .then(pl.col("qv").median().over(["sample", "hap", "lbl"]))
+            .otherwise(pl.col("qv"))
+            .alias("qv"),
+            pl.when(pl.col("Population Abbreviation").is_in(AFR_POP_LABELS))
+            .then(pl.lit("AFR"))
+            .otherwise(pl.lit("Non-AFR"))
+            .alias("Sample"),
+            ((pl.col("end") - pl.col("start")) / 1_000_000).alias("Length (Mbp)"),
+        )
+        .with_columns(
+            # Assign id for each group between release and afr/non-afr
+            group=pl.when(pl.col("lbl").eq("a"))
+            .then(
+                pl.when(pl.col("Sample").eq(pl.lit("AFR")))
+                .then(pl.lit(0))
+                .otherwise(pl.lit(1))
+            )
+            .otherwise(
+                pl.when(pl.col("Sample").eq(pl.lit("AFR")))
+                .then(pl.lit(2))
+                .otherwise(pl.lit(3))
+            )
+        )
+        .with_columns(
+            # make a numerical column and add some jitter
+            # https://stackoverflow.com/a/75541978
+            x=pl.col("group") + np.random.uniform(-0.1, 0.1, len(df_qvs)),
+            lbl=pl.col("group").cast(pl.String).replace(labels),
+        )
     )
 
-    fig, ax = plt.subplots(figsize=(12, 16))
-    ax: Axes
-    sns.violinplot(
-        df_qvs,
+    g = sns.catplot(
+        data=df_qvs,
         x="lbl",
         y="qv",
-        hue="lbl",
+        hue="group",
+        hue_order=list(range(4)),
+        order=labels.values(),
         inner="quart",
         palette=colors,
         legend=None,
-        ax=ax,
+        kind="violin",
+        density_norm="count",
+        height=8,
+        aspect=1,
     )
+    ax: Axes = g.ax
     # https://stackoverflow.com/a/70715319
     # Draw labels on quartiles
     for line in ax.lines:
@@ -147,8 +174,9 @@ def main():
         hue="Sample",
         size="Length (Mbp)",
         sizes=(1, 800),
-        linewidth=1,
+        linewidth=0.5,
         edgecolor="black",
+        hue_order=["AFR", "Non-AFR"],
         palette={"AFR": "orange", "Non-AFR": "gray"},
         ax=ax,
     )
@@ -159,6 +187,25 @@ def main():
     for spine in ("top", "right"):
         ax.spines[spine].set_visible(False)
 
+    df_qvs = df_qvs.with_columns(lbl=pl.col("lbl").str.replace("\n", " "))
+
+    peak_rows = []
+    for grp, df_grp in df_qvs.group_by(["lbl"]):
+        counts = df_grp["qv"].round().value_counts().sort(by="qv")
+        peaks, props = find_peaks(counts["count"], height=10)
+        for pk, ht in zip(peaks, props["peak_heights"]):
+            peak_rows.append((pk, ht, grp[0]))
+
+    df_peaks = pl.DataFrame(
+        peak_rows,
+        orient="row",
+        schema={"qv": pl.Float32, "ht": pl.Int32, "lbl": pl.String},
+        infer_schema_length=None,
+    )
+    df_peaks.write_csv(
+        f"{args.output_prefix}_peaks.tsv", separator="\t", include_header=True
+    )
+
     sns.move_legend(
         ax, loc="center", fontsize=18, bbox_to_anchor=(1.125, 0.5), **LEGEND_KWARGS
     )
@@ -168,14 +215,13 @@ def main():
         mean=pl.col("qv").mean(),
         stdev=pl.col("qv").std(),
         perc_75=pl.col("qv").quantile(0.75),
-        mode=pl.col("qv").mode().cast(pl.String).str.join(","),
     )
 
     df_qvs.write_csv(f"{args.output_prefix}.tsv", separator="\t", include_header=True)
     df_qvs_summary.write_csv(
         f"{args.output_prefix}_summary.tsv", separator="\t", include_header=True
     )
-    fig.savefig(f"{args.output_prefix}.png", bbox_inches="tight", dpi=600)
+    g.savefig(f"{args.output_prefix}.png", bbox_inches="tight", dpi=600)
 
 
 if __name__ == "__main__":

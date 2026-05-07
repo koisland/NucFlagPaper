@@ -157,18 +157,27 @@ rule plot_err_comparison:
             sm=DATA.keys(),
             release="R2",
         ),
+        metadata=SM_METADATA,
     output:
-        png_cmp_sm=join(OUTPUT_DIR, "plots", "hprc_err_comparison_by_sm.png"),
-        png_diff_by_name=join(
-            OUTPUT_DIR, "plots", "hprc_err_comparison_diff_by_name.png"
+        png_cmp_sm=multiext(
+            join(OUTPUT_DIR, "plots", "hprc_err_comparison"),
+            ".png",
+            ".pdf",
         ),
-        sm_diff=join(OUTPUT_DIR, "plots", "hprc_err_comparison_by_sample.tsv"),
-        name_diff=join(OUTPUT_DIR, "plots", "hprc_err_comparison_by_name.tsv"),
-        sm_name_diff=join(
-            OUTPUT_DIR, "plots", "hprc_err_comparison_by_sample_and_name.tsv"
-        ),
+        png_diff_by_name=[
+            multiext(
+                join(OUTPUT_DIR, "plots", f"hprc_err_comparison_{metric}_combined"),
+                ".png",
+                ".pdf",
+            )
+            for metric in ("length", "count", "all_length", "all_count")
+        ],
+        sm_diff=join(OUTPUT_DIR, "plots", "hprc_err_comparison_sm_diff.tsv"),
+        name_diff=join(OUTPUT_DIR, "plots", "hprc_err_comparison_name_diff.tsv"),
+        sm_name_diff=join(OUTPUT_DIR, "plots", "hprc_err_comparison_sm_name_diff.tsv"),
     params:
         script="workflow/scripts/compare_hprc/plot_err_compare.py",
+        output_prefix=lambda wc, output: splitext(output.png_cmp_sm[0])[0],
     conda:
         "../../envs/tools.yaml"
     shell:
@@ -176,11 +185,8 @@ rule plot_err_comparison:
         python {params.script} \
         -a <(cat {input.calls_r1}) \
         -b <(cat {input.calls_r2}) \
-        -nd {output.name_diff} \
-        -sd {output.sm_diff} \
-        -snd {output.sm_name_diff} \
-        -o {output.png_cmp_sm} \
-        -n {output.png_diff_by_name}
+        -m {input.metadata} \
+        -o {params.output_prefix}
         """
 
 
