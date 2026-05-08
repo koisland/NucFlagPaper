@@ -2,8 +2,11 @@ import sys
 import random
 import argparse
 import polars as pl
+import seaborn as sns
 import matplotlib.pyplot as plt
+import matplotlib.patheffects as pe
 
+from collections import Counter, defaultdict
 from matplotlib.axes import Axes
 from matplotlib.patches import Patch
 from matplotlib.colors import to_hex
@@ -11,6 +14,7 @@ from matplotlib.lines import Line2D
 from matplotlib.collections import PatchCollection
 from matplotlib.patches import Polygon
 
+plt.rcParams["font.family"] = "Arial"
 
 LEGEND_KWARGS = dict(
     handlelength=1.0,
@@ -62,13 +66,29 @@ DUPMASKER_COLORS = {
 }
 # https://humanpangenome.org/samples/
 AFR_POP_LABELS = {"ACB", "GWD", "ESN", "MKK", "LWK", "ASL", "YRI", "MSL", "ASW"}
+LARGE_ERRORS = {
+    "false_dup",
+    "misjoin",
+    "collapse",
+    "scaffold",
+    "softclip",
+}
+SMALL_ERRORS = {
+    "insertion",
+    "deletion",
+    "homopolymer",
+    "dinucleotide",
+    "simple_repeat",
+    "other_repeat",
+    "mismatch",
+    "low_quality",
+    "het_or_mismap",
+}
+RELEASE_COLORS = {"R1": "red", "R2": "blue"}
 
 
 def item_rgb_to_hex(color: str) -> str:
     return to_hex(tuple(int(c) / 255.0 for c in color.split(",")))
-
-
-plt.rcParams["font.family"] = "Arial"
 
 
 def minimalize_ax(ax: Axes, *, remove_ticks: bool = False) -> None:
@@ -133,7 +153,10 @@ def make_reorient_relative_df(df: pl.DataFrame) -> pl.DataFrame:
 
 
 def draw_r1_r2_smn(
-    df_all: pl.DataFrame, output_prefix: str, figsize: tuple[int, int] = (12, 24)
+    df_all: pl.DataFrame,
+    nucflag_colors: dict[str, str],
+    output_prefix: str,
+    figsize: tuple[int, int] = (12, 24),
 ):
     sm_haps = sorted(set(df_all.select("sm", "hap").iter_rows()))
     fig, axes = plt.subplots(
@@ -144,6 +167,9 @@ def draw_r1_r2_smn(
         height_ratios=[0.25, 1.0] * len(sm_haps),
         figsize=figsize,
     )
+    breaks_counter = defaultdict(Counter)
+    breaks_color = {True: "red", False: "black"}
+    breaks_labels = {True: "Break", False: "Complete"}
     for row_offset, annot in enumerate(("nucflag", "dupmasker")):
         df_annot = df_all.filter(pl.col("dtype").eq(pl.lit(annot)))
         for row, (sm, hap) in enumerate(sm_haps):
@@ -217,7 +243,9 @@ def draw_r1_r2_smn(
                             zorder=2,
                         )
                         has_break = True
-                    color = "red" if has_break else "black"
+
+                    breaks_counter[release][has_break] += 1
+                    color = breaks_color[has_break]
                     ax.set_ylabel(
                         f"{sm}_hap{hap}",
                         color=color,
@@ -227,8 +255,69 @@ def draw_r1_r2_smn(
                         fontsize=12,
                     )
 
-    axes[0, 0].set_title("Release 1", fontsize=18)
-    axes[0, 1].set_title("Release 2", fontsize=18)
+    # Draw breakdown of errors in locus
+    fig_nucflag, ax_nucflag = plt.subplots(layout="constrained", figsize=(6, 4))
+    ax_nucflag: Axes
+    df_nucflag = (
+        df_all.filter(pl.col("dtype").eq(pl.lit("nucflag")))
+        .group_by(["release", "name"])
+        .agg(length=(pl.col("end") - pl.col("st")).sum(), count=pl.col("end").count())
+        .sort(by=["name", "release"])
+    )
+    sns.barplot(
+        data=df_nucflag,
+        x="name",
+        y="count",
+        hue="release",
+        order=[*LARGE_ERRORS, *SMALL_ERRORS],
+        hue_order=["R1", "R2"],
+        palette=RELEASE_COLORS,
+        ax=ax_nucflag,
+    )
+    ax_nucflag.set_xlabel(None)
+    ax_nucflag.set_ylabel("# of calls")
+    for lbl in ax_nucflag.xaxis.get_majorticklabels():
+        lbl.set_rotation(45)
+        lbl.set_color(nucflag_colors[lbl.get_text()])
+        lbl.set_horizontalalignment("right")
+        lbl.set_rotation_mode("anchor")
+        lbl.set_path_effects([pe.withStroke(linewidth=0.5, foreground="black")])
+
+    for spine in ("top", "right"):
+        ax_nucflag.spines[spine].set_visible(False)
+
+    sns.move_legend(ax_nucflag, title=None, **LEGEND_KWARGS | {"loc": "upper right"})
+
+    fig_nucflag.savefig(f"{output_prefix}_errors.pdf", bbox_inches="tight", dpi=300)
+    fig_nucflag.savefig(f"{output_prefix}_errors.png", bbox_inches="tight", dpi=300)
+
+    # https://stackoverflow.com/a/73617021
+    def fmt_pct(pct: float, values: list[float]):
+        total = sum(values)
+        val = int(round(pct * total / 100.0))
+        return f"{pct:.1f}%\n({val})"
+
+    # Draw pie chart of number with breaks
+    fig_pie, axes_pie = plt.subplots(layout="constrained", ncols=2, nrows=1)
+    for i, ax_pie in enumerate(axes_pie):
+        release = f"R{i + 1}"
+        ax_pie: Axes = axes_pie[i]
+        ax_pie.pie(
+            x=list(breaks_counter[release].values()),
+            labels=[breaks_labels[k] for k in breaks_counter[release].keys()],
+            colors=[breaks_color[k] for k in breaks_counter[release].keys()],
+            autopct=lambda pct: fmt_pct(pct, breaks_counter[release].values()),
+            textprops={
+                "path_effects": [pe.withStroke(linewidth=2.0, foreground="white")]
+            },
+        )
+    fig_pie.savefig(f"{output_prefix}_breaks.pdf", bbox_inches="tight", dpi=300)
+    fig_pie.savefig(f"{output_prefix}_breaks.png", bbox_inches="tight", dpi=300)
+
+    ax_r1_top: Axes = axes[0, 0]
+    ax_r1_top.set_title("Release 1", color=RELEASE_COLORS["R1"], pad=5, fontsize=18)
+    ax_r2_top: Axes = axes[0, 1]
+    ax_r2_top.set_title("Release 2", color=RELEASE_COLORS["R2"], pad=5, fontsize=18)
 
     fig.savefig(f"{output_prefix}.png", bbox_inches="tight", dpi=300)
     fig.savefig(f"{output_prefix}.pdf", bbox_inches="tight", dpi=300)
@@ -369,9 +458,12 @@ def main():
     subset_sm = random.sample(list(df_all["sm"].unique()), args.n_subset)
     df_subset_all = df_all.filter(pl.col("sm").is_in(subset_sm))
 
-    # draw_r1_r2_smn(df_all=df_all, output_prefix=args.output_prefix)
+    draw_r1_r2_smn(
+        df_all=df_all, nucflag_colors=nucflag_colors, output_prefix=args.output_prefix
+    )
     draw_r1_r2_smn(
         df_all=df_subset_all,
+        nucflag_colors=nucflag_colors,
         output_prefix=f"{args.output_prefix}_subset{args.n_subset}",
         figsize=(12, 8),
     )

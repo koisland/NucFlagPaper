@@ -191,6 +191,7 @@ rule plot_err_comparison:
 
 
 include: "smn.smk"
+include: "censat.smk"
 
 
 rule all:
@@ -205,4 +206,5 @@ rule all:
         rules.plot_qv_comparison.output,
         rules.plot_err_comparison.output,
         rules.smn_all.input,
+        rules.censat_status_all.input,
     default_target: True

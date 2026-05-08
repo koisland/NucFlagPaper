@@ -7,7 +7,6 @@ import scikit_posthocs as sp
 import matplotlib.pyplot as plt
 
 from matplotlib.axes import Axes
-from matplotlib.patches import Patch
 from scipy.stats import normaltest
 
 plt.rcParams["font.family"] = "Arial"
@@ -211,7 +210,7 @@ def draw_plot_all(
         lbl.set_fontsize(14)
         lbl.set_color(label_colors.get(lbl.get_text(), "white"))
 
-    fig.supylabel("Homopolymer length (bp)", fontsize=14)
+    fig.supylabel("Error homopolymer length (bp)", fontsize=14)
     return fig
 
 
@@ -285,6 +284,8 @@ def main():
         df_nt_bins = df_bins.filter(pl.col("nt") == nt)
         res_map = dunn_test(df_nt_bins)
 
+        ax1.set_title(nt, fontsize=18)
+
         for ax, ylim in (
             (ax1, ylims[0]),
             (ax2, ylims[1]),
@@ -321,14 +322,15 @@ def main():
             ax.set_ylabel(None)
 
         level = 0
+        ymin, ymax = ax1.get_ylim()
+        # Draw brackets within this yaxis limit
+        ylim = (ymin, ymax - 12)
         for (label_1, label_2), p in res_map.items():
             if p > alpha:
                 continue
             x1 = label_idxs[label_1]
             x2 = label_idxs[label_2]
-            draw_signif_brackets(
-                ax=ax1, x1=x1, x2=x2, level=level, ylim=ax1.get_ylim(), p=p
-            )
+            draw_signif_brackets(ax=ax1, x1=x1, x2=x2, level=level, ylim=ylim, p=p)
             level += 2
 
         for spine in ("top", "right", "bottom"):
@@ -357,17 +359,17 @@ def main():
             lbl.set_rotation_mode("anchor")
             lbl.set_color(label_colors.get(lbl.get_text(), "white"))
 
-    fig.legend(
-        handles=[
-            Patch(facecolor=color, edgecolor="black", label=lbl, alpha=0.5)
-            for lbl, color in NT_COLORS.items()
-        ],
-        loc="center left",
-        bbox_to_anchor=(1, 0.9),
-        fontsize=14,
-        **LEGEND_KWARGS,
-    )
-    fig.supylabel("Homopolymer length (bp)", fontsize=14)
+    # fig.legend(
+    #     handles=[
+    #         Patch(facecolor=color, edgecolor="black", label=lbl, alpha=0.5)
+    #         for lbl, color in NT_COLORS.items()
+    #     ],
+    #     loc="center left",
+    #     bbox_to_anchor=(1, 0.9),
+    #     fontsize=14,
+    #     **LEGEND_KWARGS,
+    # )
+    fig.supylabel("Error homopolymer length (bp)", fontsize=14)
     fig.savefig(f"{args.output_prefix}.png", bbox_inches="tight", dpi=300)
     fig.savefig(f"{args.output_prefix}.pdf", bbox_inches="tight", dpi=300)
 
