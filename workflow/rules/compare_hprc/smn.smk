@@ -41,8 +41,24 @@ rule query_w_impg_sm_to_chm13_paf:
     shell:
         """
         impg query -p {input.paf} -b {input.bed} | \
-        sort -k 1,1 -k2,2n | \
-        bedtools merge -d 1000000 -i - -c 4,5,6,7,8,9,10 -o first,min,max,first,first,first,first > {output}
+        sort -k 1,1 -k2,2n > {output}
+        """
+
+
+# Merge intervals and preserve orientation of query based on aligned length
+rule merge_intervals_preserve_ort:
+    input:
+        rules.query_w_impg_sm_to_chm13_paf.output,
+    output:
+        join(OUTPUT_DIR, "smn", "{ref}", "{sm_release}_merged.bed"),
+    params:
+        bp_merge=1_000_000,
+        script="workflow/scripts/compare_hprc/merge_impg_itvs.py",
+    conda:
+        "../../envs/tools.yaml"
+    shell:
+        """
+        python {params.script} {input} {params.bp_merge} > {output}
         """
 
 
@@ -50,7 +66,7 @@ rule query_w_impg_sm_to_chm13_paf:
 rule subset_smn:
     input:
         asm=join(OUTPUT_DIR, "data", "{sm_release}.fa.gz"),
-        bed=rules.query_w_impg_sm_to_chm13_paf.output,
+        bed=rules.merge_intervals_preserve_ort.output,
     output:
         fa=temp(join(OUTPUT_DIR, "smn", "{ref}", "{sm_release}.fa")),
         fai=temp(join(OUTPUT_DIR, "smn", "{ref}", "{sm_release}.fa.fai")),
@@ -91,7 +107,7 @@ use rule * from Rhodonite as Rhodonite_*
 rule intersect_dupmasker_nucflag:
     input:
         # Liftover of bed to new assembly coordinates
-        bed=rules.query_w_impg_sm_to_chm13_paf.output,
+        bed=rules.merge_intervals_preserve_ort.output,
         dupmasker=expand(rules.Rhodonite_DupMasker.output.bed, sample="{sm_release}"),
         # NucFlag output
         nucflag=lambda wc: expand(
@@ -171,6 +187,11 @@ rule plot_r1_r2_chm13_coords:
 rule smn_all:
     input:
         rules.asm_ref_hprc_r1_r2_all.input,
+        expand(
+            rules.merge_intervals_preserve_ort.output,
+            ref="CHM13v2.0",
+            sm_release=list(get_sms_release(*RELEASES)),
+        ),
         expand(
             rules.intersect_dupmasker_nucflag.output,
             ref="CHM13v2.0",

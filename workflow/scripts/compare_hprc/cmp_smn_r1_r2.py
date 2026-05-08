@@ -84,7 +84,7 @@ SMALL_ERRORS = {
     "low_quality",
     "het_or_mismap",
 }
-RELEASE_COLORS = {"R1": "red", "R2": "blue"}
+RELEASE_COLORS = {"Release 1": "red", "Release 2": "blue"}
 
 
 def item_rgb_to_hex(color: str) -> str:
@@ -175,7 +175,7 @@ def draw_r1_r2_smn(
         for row, (sm, hap) in enumerate(sm_haps):
             row = (row * 2) + row_offset
 
-            for col, release in enumerate(("R1", "R2")):
+            for col, release in enumerate(("Release 1", "Release 2")):
                 df_sm_hap_annot = df_annot.filter(
                     pl.col("sm").eq(pl.lit(sm))
                     & pl.col("hap").eq(pl.lit(hap))
@@ -256,7 +256,7 @@ def draw_r1_r2_smn(
                     )
 
     # Draw breakdown of errors in locus
-    fig_nucflag, ax_nucflag = plt.subplots(layout="constrained", figsize=(6, 4))
+    fig_nucflag, ax_nucflag = plt.subplots(layout="constrained", figsize=(12, 4))
     ax_nucflag: Axes
     df_nucflag = (
         df_all.filter(pl.col("dtype").eq(pl.lit("nucflag")))
@@ -270,12 +270,21 @@ def draw_r1_r2_smn(
         y="count",
         hue="release",
         order=[*LARGE_ERRORS, *SMALL_ERRORS],
-        hue_order=["R1", "R2"],
+        hue_order=["Release 1", "Release 2"],
         palette=RELEASE_COLORS,
         ax=ax_nucflag,
     )
+    for cont in ax_nucflag.containers:
+        ax_nucflag.bar_label(
+            cont,
+            fontsize=12,
+            label_type="center",
+            path_effects=[pe.withStroke(linewidth=2.0, foreground="white")],
+        )
+    ax_nucflag.tick_params(axis="both", which="major", labelsize=14)
+
     ax_nucflag.set_xlabel(None)
-    ax_nucflag.set_ylabel("# of calls")
+    ax_nucflag.set_ylabel("# of calls", fontsize=14)
     for lbl in ax_nucflag.xaxis.get_majorticklabels():
         lbl.set_rotation(45)
         lbl.set_color(nucflag_colors[lbl.get_text()])
@@ -286,7 +295,9 @@ def draw_r1_r2_smn(
     for spine in ("top", "right"):
         ax_nucflag.spines[spine].set_visible(False)
 
-    sns.move_legend(ax_nucflag, title=None, **LEGEND_KWARGS | {"loc": "upper right"})
+    sns.move_legend(
+        ax_nucflag, fontsize=14, title=None, **LEGEND_KWARGS | {"loc": "upper left"}
+    )
 
     fig_nucflag.savefig(f"{output_prefix}_errors.pdf", bbox_inches="tight", dpi=300)
     fig_nucflag.savefig(f"{output_prefix}_errors.png", bbox_inches="tight", dpi=300)
@@ -298,10 +309,11 @@ def draw_r1_r2_smn(
         return f"{pct:.1f}%\n({val})"
 
     # Draw pie chart of number with breaks
-    fig_pie, axes_pie = plt.subplots(layout="constrained", ncols=2, nrows=1)
+    fig_pie, axes_pie = plt.subplots(layout="constrained", ncols=1, nrows=2)
     for i, ax_pie in enumerate(axes_pie):
-        release = f"R{i + 1}"
+        release = f"Release {i + 1}"
         ax_pie: Axes = axes_pie[i]
+        ax_pie.set_title(release, color=RELEASE_COLORS[release])
         ax_pie.pie(
             x=list(breaks_counter[release].values()),
             labels=[breaks_labels[k] for k in breaks_counter[release].keys()],
@@ -315,9 +327,13 @@ def draw_r1_r2_smn(
     fig_pie.savefig(f"{output_prefix}_breaks.png", bbox_inches="tight", dpi=300)
 
     ax_r1_top: Axes = axes[0, 0]
-    ax_r1_top.set_title("Release 1", color=RELEASE_COLORS["R1"], pad=5, fontsize=18)
+    ax_r1_top.set_title(
+        "Release 1", color=RELEASE_COLORS["Release 1"], pad=5, fontsize=18
+    )
     ax_r2_top: Axes = axes[0, 1]
-    ax_r2_top.set_title("Release 2", color=RELEASE_COLORS["R2"], pad=5, fontsize=18)
+    ax_r2_top.set_title(
+        "Release 2", color=RELEASE_COLORS["Release 2"], pad=5, fontsize=18
+    )
 
     fig.savefig(f"{output_prefix}.png", bbox_inches="tight", dpi=300)
     fig.savefig(f"{output_prefix}.pdf", bbox_inches="tight", dpi=300)
@@ -343,7 +359,7 @@ def main():
 
     # contig lengths
     all_lengths = []
-    for lbl, fais in (("R1", args.r1_fai), ("R2", args.r2_fai)):
+    for lbl, fais in (("Release 1", args.r1_fai), ("Release 2", args.r2_fai)):
         for file in fais:
             df_fai = pl.read_csv(
                 file,
@@ -404,7 +420,7 @@ def main():
         pl.concat(dfs_r1_nucflag)
         .filter(pl.col("name").ne(pl.lit("correct")))
         .join(
-            df_all_lengths.filter(pl.col("release").eq(pl.lit("R1"))),
+            df_all_lengths.filter(pl.col("release").eq(pl.lit("Release 1"))),
             on="qchrom",
             how="left",
         )
@@ -413,18 +429,18 @@ def main():
         pl.concat(dfs_r2_nucflag)
         .filter(pl.col("name").ne(pl.lit("correct")))
         .join(
-            df_all_lengths.filter(pl.col("release").eq(pl.lit("R1"))),
+            df_all_lengths.filter(pl.col("release").eq(pl.lit("Release 1"))),
             on="qchrom",
             how="left",
         )
     )
     df_r1_dupmasker = pl.concat(dfs_r1_dupmasker).join(
-        df_all_lengths.filter(pl.col("release").eq(pl.lit("R1"))),
+        df_all_lengths.filter(pl.col("release").eq(pl.lit("Release 1"))),
         on="qchrom",
         how="left",
     )
     df_r2_dupmasker = pl.concat(dfs_r2_dupmasker).join(
-        df_all_lengths.filter(pl.col("release").eq(pl.lit("R2"))),
+        df_all_lengths.filter(pl.col("release").eq(pl.lit("Release 2"))),
         on="qchrom",
         how="left",
     )
@@ -433,13 +449,17 @@ def main():
     # Also reorient if not forward oriented
     df_all = pl.concat(
         [
-            df_r1_nucflag.with_columns(release=pl.lit("R1"), dtype=pl.lit("nucflag")),
-            df_r2_nucflag.with_columns(release=pl.lit("R2"), dtype=pl.lit("nucflag")),
+            df_r1_nucflag.with_columns(
+                release=pl.lit("Release 1"), dtype=pl.lit("nucflag")
+            ),
+            df_r2_nucflag.with_columns(
+                release=pl.lit("Release 2"), dtype=pl.lit("nucflag")
+            ),
             df_r1_dupmasker.with_columns(
-                release=pl.lit("R1"), dtype=pl.lit("dupmasker")
+                release=pl.lit("Release 1"), dtype=pl.lit("dupmasker")
             ),
             df_r2_dupmasker.with_columns(
-                release=pl.lit("R2"), dtype=pl.lit("dupmasker")
+                release=pl.lit("Release 2"), dtype=pl.lit("dupmasker")
             ),
         ]
     )
