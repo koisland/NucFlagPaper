@@ -23,6 +23,7 @@ MAPQ_COLORS = {
     "55-60": "#f21821",
     "60": "#FF8DA1",
 }
+plt.rcParams["font.family"] = "Arial"
 
 
 def main():

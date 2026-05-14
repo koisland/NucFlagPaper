@@ -4,6 +4,8 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 from matplotlib.axes import Axes
 
+plt.rcParams["font.family"] = "Arial"
+
 
 def main():
     infile = sys.argv[1]

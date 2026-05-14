@@ -28,6 +28,7 @@ LEGEND_KWARGS = dict(
     fancybox=False,
     frameon=False,
 )
+plt.rcParams["font.family"] = "Arial"
 
 
 def minimalize_ax(
@@ -92,7 +93,7 @@ def draw_stacked_bars(
 
 def plot_homopolymers_stacked(
     homopolymer_bins: defaultdict[str, Counter[int, int]],
-    outfile: str,
+    outfile_prefix: str,
     xlabel: str = "Homopolymer length (bp)",
     ylabel: str = "Number of NucFlag homopolymer calls",
     other_homopolymer_bins: defaultdict[str, Counter[int, int]] | None = None,
@@ -126,12 +127,13 @@ def plot_homopolymers_stacked(
         loc="upper right",
         **LEGEND_KWARGS,
     )
-    fig.savefig(outfile, bbox_inches="tight", dpi=300)
+    fig.savefig(f"{outfile_prefix}.png", bbox_inches="tight", dpi=300)
+    fig.savefig(f"{outfile_prefix}.pdf", bbox_inches="tight", dpi=300)
 
 
 def plot_homopolymers_split(
     homopolymer_bins: defaultdict[str, Counter[int, int]],
-    outfile: str,
+    outfile_prefix: str,
     xlabel: str = "Homopolymer length (bp)",
     ylabel: str = "Number of NucFlag homopolymer calls",
     *,
@@ -180,7 +182,8 @@ def plot_homopolymers_split(
         ncol=len(labels_handles.keys()),
         **LEGEND_KWARGS,
     )
-    fig.savefig(outfile, bbox_inches="tight", dpi=300)
+    fig.savefig(f"{outfile_prefix}.png", bbox_inches="tight", dpi=300)
+    fig.savefig(f"{outfile_prefix}.pdf", bbox_inches="tight", dpi=300)
 
 
 def process_one(fa: str, df_lcr: pl.DataFrame) -> tuple[str, it.IntervalTree]:
@@ -345,17 +348,17 @@ def main():  #
     print("Homopolymers binned.", file=sys.stderr)
     # NucFlag overlap
     plot_homopolymers_stacked(
-        homopolymer_bins, os.path.join(f"{args.plot_prefix}_ovl_stacked.png")
+        homopolymer_bins, os.path.join(f"{args.plot_prefix}_ovl_stacked")
     )
     plot_homopolymers_split(
         homopolymer_bins,
-        os.path.join(f"{args.plot_prefix}_ovl_split.png"),
+        os.path.join(f"{args.plot_prefix}_ovl_split"),
         include_n=args.reference is None,
     )
     # All
     plot_homopolymers_stacked(
         all_homopolymer_bins,
-        os.path.join(f"{args.plot_prefix}_all_stacked.png"),
+        os.path.join(f"{args.plot_prefix}_all_stacked"),
         ylabel="Number of longdust homopolymer calls",
         # Draw other nucflag overlap as black
         other_homopolymer_bins=homopolymer_bins,
@@ -364,7 +367,7 @@ def main():  #
     )
     plot_homopolymers_split(
         all_homopolymer_bins,
-        os.path.join(f"{args.plot_prefix}_all_split.png"),
+        os.path.join(f"{args.plot_prefix}_all_split"),
         ylabel="Number of longdust homopolymer calls",
         include_n=args.reference is None,
     )

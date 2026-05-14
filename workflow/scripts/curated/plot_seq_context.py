@@ -89,6 +89,8 @@ LEGEND_KWARGS = dict(
     frameon=False,
 )
 
+plt.rcParams["font.family"] = "Arial"
+
 
 def rgb_to_hex(srs: pl.Series) -> pl.Series:
     color_hex = []
