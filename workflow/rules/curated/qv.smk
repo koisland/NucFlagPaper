@@ -90,7 +90,8 @@ rule plot_nucflag_merqury_qv_plot:
         ),
     output:
         plot=[
-            join(OUTPUT_DIR, "qv", "HG002_qv.png"),
+            multiext(join(OUTPUT_DIR, "qv", f"HG002_qv_{v}"), ".png", ".pdf")
+            for v in ASSEMBLIES.keys()
         ],
     conda:
         "../../envs/curated.yaml"

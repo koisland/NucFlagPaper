@@ -57,9 +57,6 @@ rule run_deepvariant:
 Filter VCF calls and convert to BED.
 * https://github.com/google/deepvariant/issues/503
 * https://github.com/google/deepvariant/issues/278
-
-* From Q100 manuscript:
-    * Finally, 1,505 homozygous variant calls in the HiFi “all to all” DeepVariant set above (Table S2) were filtered to require GQ>=20 and DP<75
 """
 
 

@@ -274,7 +274,7 @@ rule recalculate_precision_recall_w_intersect:
             -loj | \
             awk -v OFS="\\t" '{{
                 # Change homopolymer calls to correct if no element support
-                if ($4 == "homopolymer" && $10 == ".") {{
+                if ($4 == "homopolymer" && $12 == ".") {{
                     $4="correct"
                 }};
                 print $1, $2, $3, $4, $5, $6, $7, $8, $9

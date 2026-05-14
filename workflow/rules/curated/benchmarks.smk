@@ -34,6 +34,19 @@ rule calculate_precision_recall:
         """
 
 
+# rule f1_by_length:
+#     input:
+#         rules.calculate_precision_recall.output.missed_calls_dir,
+#     output:
+#         join(OUTPUT_DIR, "summary", "{tool}_{version}_f1_by_len.png"),
+#     conda:
+#         "../../envs/tools.yaml"
+#     shell:
+#         """
+#         python
+#         """
+
+
 # Create venn-diagram shared between callers
 # Shows that NucFlag picks up a lot more than other callers.
 rule plot_call_venn:

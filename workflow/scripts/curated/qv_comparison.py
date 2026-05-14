@@ -5,75 +5,12 @@ import scipy.stats
 from matplotlib.axes import Axes
 from matplotlib.lines import Line2D
 
-import numpy as np
 import polars as pl
 import seaborn as sns
 import matplotlib.pyplot as plt
-import matplotlib.gridspec as gridspec
 
 # https://kyrrego.github.io/blog/2025/01/31/my-first-blog.html
 plt.rcParams["font.family"] = "Arial"
-
-
-# Source - https://stackoverflow.com/a
-# Posted by ImportanceOfBeingErnest, modified by community. See post 'Timeline' for change history
-# Retrieved 2025-12-24, License - CC BY-SA 4.0
-class SeabornFig2Grid:
-    def __init__(
-        self, seaborngrid, fig: plt.Figure, subplot_spec: gridspec.SubplotSpec
-    ):
-        self.fig = fig
-        self.sg = seaborngrid
-        self.subplot = subplot_spec
-        if isinstance(self.sg, sns.axisgrid.FacetGrid) or isinstance(
-            self.sg, sns.axisgrid.PairGrid
-        ):
-            self._movegrid()
-        elif isinstance(self.sg, sns.axisgrid.JointGrid):
-            self._movejointgrid()
-        self._finalize()
-
-    def _movegrid(self):
-        """Move PairGrid or Facetgrid"""
-        self._resize()
-        n = self.sg.axes.shape[0]
-        m = self.sg.axes.shape[1]
-        self.subgrid = gridspec.GridSpecFromSubplotSpec(n, m, subplot_spec=self.subplot)
-        for i in range(n):
-            for j in range(m):
-                self._moveaxes(self.sg.axes[i, j], self.subgrid[i, j])
-
-    def _movejointgrid(self):
-        """Move Jointgrid"""
-        h = self.sg.ax_joint.get_position().height
-        h2 = self.sg.ax_marg_x.get_position().height
-        r = int(np.round(h / h2))
-        self._resize()
-        self.subgrid = gridspec.GridSpecFromSubplotSpec(
-            r + 1, r + 1, subplot_spec=self.subplot
-        )
-
-        self._moveaxes(self.sg.ax_joint, self.subgrid[1:, :-1])
-        self._moveaxes(self.sg.ax_marg_x, self.subgrid[0, :-1])
-        self._moveaxes(self.sg.ax_marg_y, self.subgrid[1:, -1])
-
-    def _moveaxes(self, ax: Axes, gs: gridspec.SubplotSpec):
-        # https://stackoverflow.com/a/46906599/4124317
-        ax.remove()
-        ax.figure = self.fig
-        self.fig.axes.append(ax)
-        self.fig.add_axes(ax)
-        ax._subplotspec = gs
-        ax.set_position(gs.get_position(self.fig))
-        ax.set_subplotspec(gs)
-
-    def _finalize(self):
-        plt.close(self.sg.fig)
-        self.fig.canvas.mpl_connect("resize_event", self._resize)
-        self.fig.canvas.draw()
-
-    def _resize(self, evt=None):
-        self.sg.fig.set_size_inches(self.fig.get_size_inches())
 
 
 def main():
@@ -135,7 +72,6 @@ def main():
             transform=ax.transAxes,
         )
 
-    figs = []
     for label, color, qv_x, qv_y in zip(
         args.labels, args.colors, args.qv_x, args.qv_y, strict=True
     ):
@@ -210,30 +146,24 @@ def main():
         ax.set_xlabel(args.xlabel, fontsize="x-large")
         ax.set_ylabel(args.ylabel, fontsize="x-large")
         # annotate(ax, df_other_chrs)
-        figs.append(p)
 
-    fig = plt.figure(figsize=(20, 8))
-    gs = gridspec.GridSpec(1, len(args.labels))
-
-    for i, f in enumerate(figs):
-        _ = SeabornFig2Grid(f, fig, gs[i])
-
-    if args.highlight_acrocentrics:
-        fig.legend(
-            labels=["Acrocentric"],
-            handles=[
-                Line2D(
-                    [],
-                    [],
-                    color="white",
-                    marker="o",
-                    markerfacecolor="none",
-                    markeredgecolor="black",
-                )
-            ],
-        )
-    gs.tight_layout(fig)
-    fig.savefig(f"{args.output_prefix}.png")
+        if args.highlight_acrocentrics:
+            ax.legend(
+                labels=["Acrocentric"],
+                handles=[
+                    Line2D(
+                        [],
+                        [],
+                        color="white",
+                        marker="o",
+                        markerfacecolor="none",
+                        markeredgecolor="black",
+                    )
+                ],
+                loc="upper right",
+            )
+        p.savefig(f"{args.output_prefix}_{label}.pdf", dpi=300)
+        p.savefig(f"{args.output_prefix}_{label}.png", dpi=300)
 
 
 if __name__ == "__main__":
