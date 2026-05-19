@@ -3,11 +3,10 @@ import argparse
 
 import polars as pl
 import seaborn as sns
-import scikit_posthocs as sp
 import matplotlib.pyplot as plt
 
 from matplotlib.axes import Axes
-from scipy.stats import normaltest
+from scipy.stats import normaltest, ks_2samp, false_discovery_control
 
 plt.rcParams["font.family"] = "Arial"
 
@@ -60,22 +59,26 @@ def dunn_test(df_nt_bins: pl.DataFrame) -> dict[tuple[str, str], float]:
         print(f"{lbl} mean length: {df_vals['len'].mean()} ({dim[0]})", file=sys.stderr)
         print(f"{lbl}: {nres}", file=sys.stderr)
 
-    # Use Kruskal-Wallis test and post-hoc Dunn to determine if any difference between medians of labels.
-    # https://stats.stackexchange.com/a/95270
-    # https://www.statology.org/dunns-test-python/
-    # H_0 - There is no significant difference in the median between a pair of labels.
-    res = sp.posthoc_dunn(
-        [df["len"] for df in dfs_nt_label_bins.values()], p_adjust="fdr_bh"
-    )
-    print(res, file=sys.stderr)
-    labels = tuple(dfs_nt_label_bins.keys())
-    res.index = labels
-    res.columns = labels
+    # Use Komologorov-smirnov test and post-hoc analysis to determine if any difference between homopolymer distributions.
+    # We use this instead of our original kruskal wallis as the distribution is compared rather than just the median.
+    # H_0 - The homopolymer length distribution of two labels is identical
+    # https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.kstest.html
+    pvals = {}
+    for lbl, df in dfs_nt_label_bins.items():
+        lbl = lbl[0]
+        for lbl2, df2 in dfs_nt_label_bins.items():
+            lbl2 = lbl2[0]
+            lbls = sorted((lbl, lbl2))
+            res = ks_2samp(df["len"], df2["len"])
+            pvals[tuple(lbls)] = res.pvalue
+
+    # Requires list for some reason
+    adj_pvals = false_discovery_control(list(pvals.values()))
+    print(pvals, file=sys.stderr)
+    print(adj_pvals, file=sys.stderr)
     return {
-        tuple(sorted([label_1[0], label_2[0]])): res.loc[label_1, label_2]
-        for label_1 in res.index
-        for label_2 in res.columns
-        if label_1 != label_2
+        lbl: adj_pval
+        for (lbl, pval), adj_pval in zip(pvals.items(), adj_pvals, strict=True)
     }
 
 

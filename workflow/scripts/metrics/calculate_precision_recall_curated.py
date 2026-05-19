@@ -29,7 +29,6 @@ GOOD_MTYPES = {"correct", "good", "Hap", "het_or_mismap"}
 
 def calculate_precision_recall(
     df_bed_misassemblies: pl.DataFrame,
-    df_bed_ctrl: pl.DataFrame,
     df_bed_truth: pl.DataFrame,
 ) -> tuple[float, float, pl.DataFrame]:
     # Create range where we liftover the control intervals to match new misassembled intervals
@@ -53,48 +52,13 @@ def calculate_precision_recall(
             for itv in df_grp.iter_rows(named=True)
         )
 
-    # To calculate the number of FPs
-    # * iterate through the control bed
-    # * For each misassembly, shift coordinates (misjoin +, dupe -, etc.) to match misassembly bed.
-    # * Store coordinates
-    # * Iterate thru misassemblies in simulated case and count number of intervals where no overlap
-    itree_ctrl_misassemblies_misasim_coords = defaultdict(intervaltree.IntervalTree)
-    for row in df_bed_ctrl.iter_rows(named=True):
-        try:
-            ovl = itree_update_ranges[row["chrom"]].overlap(row["st"], row["end"])
-        except KeyError:
-            ovl = None
-        bp_adj = 0
-        if ovl:
-            final_itv: intervaltree.Interval = max(ovl, key=lambda x: x.data[0])
-            bp_adj, mtype = final_itv.data
-            if mtype == "misjoin":
-                bp_adj = -bp_adj
-            elif mtype == "false_duplication":
-                bp_adj = bp_adj
-            elif mtype == "inversion":
-                bp_adj = 0
-        new_st = max(0, row["st"] + bp_adj)
-        new_end = row["end"] + bp_adj
-        itree_ctrl_misassemblies_misasim_coords[row["chrom"]].addi(
-            new_st, new_end, row["name"]
-        )
-
     itree_misassemblies = defaultdict(intervaltree.IntervalTree)
-    itree_new_misassemblies = defaultdict(intervaltree.IntervalTree)
     for row in df_bed_misassemblies.iter_rows(named=True):
-        ovl = itree_ctrl_misassemblies_misasim_coords[row["chrom"]].overlap(
-            row["st"], row["end"]
-        )
-        if not ovl:
-            itree_new_misassemblies[row["chrom"]].addi(
-                row["st"], row["end"], row["name"]
-            )
         itree_misassemblies[row["chrom"]].addi(row["st"], row["end"], row["name"])
 
     true_positive = 0
     false_negative = 0
-    itree_simulated_misassemblies = defaultdict(intervaltree.IntervalTree)
+    itree_truth_misassemblies = defaultdict(intervaltree.IntervalTree)
     rows = []
     for row in df_bed_truth.iter_rows(named=True):
         ovl_st, ovl_end = row["tst"] - 5, row["tend"] + 5
@@ -105,18 +69,16 @@ def calculate_precision_recall(
         else:
             false_negative += 1
             rows.append((row["chrom"], ovl_st, ovl_end, "false_negative"))
-        itree_simulated_misassemblies[row["chrom"]].addi(
-            row["tst"], row["tend"] + 1, row["name"]
-        )
+
+        itree_truth_misassemblies[row["chrom"]].addi(ovl_st, ovl_end, row["name"])
 
     recall = true_positive / (true_positive + false_negative)
-
     false_positive = 0
-    for chrom, itree in itree_simulated_misassemblies.items():
-        itree_chrom_new_misassemblies = itree_new_misassemblies[chrom]
-        for itv in sorted(itree_chrom_new_misassemblies.iter()):
-            # Is a simulated misassembly
-            if itree.overlaps(itv):
+    for chrom, itree in itree_misassemblies.items():
+        itree_chrom_truth_misassemblies = itree_truth_misassemblies[chrom]
+        for itv in itree.iter():
+            # Is a real misassembly
+            if itree_chrom_truth_misassemblies.overlaps(itv):
                 continue
             # Otherwise, is false positive
             rows.append((chrom, itv.begin, itv.end, "false_positive"))
@@ -125,7 +87,7 @@ def calculate_precision_recall(
 
     df_missing = pl.DataFrame(
         rows, orient="row", schema=["#chrom", "st", "end", "type"]
-    )
+    ).sort("#chrom", "st")
     return precision, recall, df_missing
 
 
@@ -179,9 +141,7 @@ def main():
     print("\t".join(header))
 
     output_dir_missed_calls = args.output_dir_missed_calls
-    precision, recall, missing_calls = calculate_precision_recall(
-        df_test, pl.DataFrame(schema=df_test.schema), dfs_truth
-    )
+    precision, recall, missing_calls = calculate_precision_recall(df_test, dfs_truth)
 
     row = [precision, recall]
     if output_dir_missed_calls:

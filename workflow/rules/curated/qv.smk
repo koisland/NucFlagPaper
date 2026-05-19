@@ -103,7 +103,7 @@ rule plot_nucflag_merqury_qv_plot:
         ),
         labels=" ".join(reversed(ASSEMBLIES.keys())),
         colors=" ".join(["blue", "green", "red"]),
-        output_prefix=lambda wc, output: splitext(output[0])[0],
+        output_prefix=lambda wc, output: join(dirname(output[0]), "HG002_qv"),
     log:
         os.path.join(LOGS_DIR, "plot_nucflag_merqury_qv_plot.log"),
     shell:

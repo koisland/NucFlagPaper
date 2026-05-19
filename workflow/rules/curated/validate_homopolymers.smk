@@ -94,6 +94,8 @@ rule label_lcr_regions_and_pos:
         ),
     output:
         bed=join(OUTPUT_DIR, "homopolymers", "HG002_{version}_homopolymers.bed.gz"),
+        bins=join(OUTPUT_DIR, "homopolymers", "HG002_{version}_bin_cnts.tsv"),
+        bins_all=join(OUTPUT_DIR, "homopolymers", "HG002_{version}_bin_cnts_all.tsv"),
         plots=[
             join(OUTPUT_DIR, "homopolymers", "HG002_{version}_ovl_stacked.png"),
             join(OUTPUT_DIR, "homopolymers", "HG002_{version}_ovl_split.png"),
@@ -113,9 +115,38 @@ rule label_lcr_regions_and_pos:
         # bgzip weird
         zcat {input.ref} > {input.ref}.tmp
         samtools faidx {input.ref}.tmp
-        python {input.script} -i {input.bed} -r {input.ref}.tmp -c {input.calls} -p {params.plot_prefix} | \
+        python {input.script} \
+            -i {input.bed} \
+            -r {input.ref}.tmp \
+            -c {input.calls} \
+            -p {params.plot_prefix} \
+            -b {output.bins} \
+            -a {output.bins_all} \
+            --ylim_ovl_stacked '(0, 9000)' | \
             bgzip > {output.bed}
         rm -f {input.ref}.tmp {input.ref}.tmp.fai
+        """
+
+
+# TODO: Compare distribution
+rule compare_nf_genome_dist:
+    input:
+        bins=expand(
+            rules.label_lcr_regions_and_pos.output.bins, version=ASSEMBLIES.keys()
+        ),
+        bins_all=expand(
+            rules.label_lcr_regions_and_pos.output.bins_all, version=ASSEMBLIES.keys()
+        ),
+    output:
+        pvals=join(OUTPUT_DIR, "homopolymers", "HG002_homopolymer_dist_cmp.tsv"),
+    params:
+        script="workflow/scripts/curated/cmp_homopolymer_dist.py",
+        labels=" ".join(ASSEMBLIES.keys()),
+    conda:
+        "../../envs/curated.yaml"
+    shell:
+        """
+        python {params.script} -a {input.bins} -b {input.bins_all} -l {params.labels} > {output.pvals}
         """
 
 
@@ -300,4 +331,5 @@ rule validate_homopolymers_all:
             rules.recalculate_precision_recall_w_intersect.output,
             version=ASSEMBLIES.keys(),
         ),
+        expand(rules.compare_nf_genome_dist.output, version=ASSEMBLIES.keys()),
     default_target: True

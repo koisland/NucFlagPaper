@@ -76,11 +76,13 @@ def main():
         .with_columns(coverage=(pl.col("perc_coverage") * pl.col("coverage")).round(1))
         .with_columns(pl.col("recall") * 100, pl.col("precision") * 100)
         .with_columns(
-            f1=2
-            * (
-                (pl.col("recall") * pl.col("precision"))
-                / (pl.col("recall") + pl.col("precision"))
-            )
+            f1=(
+                2
+                * (
+                    (pl.col("recall") * pl.col("precision"))
+                    / (pl.col("recall") + pl.col("precision"))
+                )
+            ).fill_nan(0.0)
         )
     )
     remove_spines = ["top", "right"]

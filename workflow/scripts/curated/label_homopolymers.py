@@ -1,4 +1,5 @@
 import os
+import ast
 import sys
 import pysam
 import argparse
@@ -99,6 +100,7 @@ def plot_homopolymers_stacked(
     other_homopolymer_bins: defaultdict[str, Counter[int, int]] | None = None,
     other_homopolymer_bin_color: str | None = None,
     other_homopolymer_bin_label: str | None = None,
+    ylim: tuple[float, float] | None = None,
 ):
     fig, ax = plt.subplots(layout="constrained", figsize=(8, 8))
     ax: Axes
@@ -115,6 +117,8 @@ def plot_homopolymers_stacked(
     minimalize_ax(ax, spines=("top", "right"))
     ax.set_xlabel(xlabel)
     ax.set_ylabel(ylabel)
+    if ylim:
+        ax.set_ylim(ylim)
 
     handles, labels = ax.get_legend_handles_labels()
     labels_handles = {}
@@ -233,7 +237,12 @@ def main():  #
         help="NucFlag calls.",
     )
     ap.add_argument("-o", "--outfile", default=sys.stdout, help="All homopolymers.")
-    ap.add_argument("-b", "--outfile_bin", default=None, help="All homopolymer bins.")
+    ap.add_argument(
+        "-b", "--outfile_bin", default=None, help="Overlapped homopolymer bins."
+    )
+    ap.add_argument(
+        "-a", "--outfile_bin_all", default=None, help="All homopolymer bins."
+    )
     ap.add_argument(
         "-x",
         "--outfile_incorrect",
@@ -247,7 +256,12 @@ def main():  #
         default="homopolymers",
         help="Plot prefix for plots.",
     )
-
+    ap.add_argument(
+        "--ylim_ovl_stacked",
+        default=None,
+        type=ast.literal_eval,
+        help="Y-axis limit for overlap stacked plots.",
+    )
     args = ap.parse_args()
 
     df_nucflag_homopolymer_calls = pl.read_csv(
@@ -345,10 +359,18 @@ def main():  #
                 for h_ln, h_cnt in cnt.items():
                     print(nt, h_ln, h_cnt, sep="\t", file=fh)
 
+    if args.outfile_bin_all:
+        with open(args.outfile_bin_all, "wt") as fh:
+            for nt, cnt in all_homopolymer_bins.items():
+                for h_ln, h_cnt in cnt.items():
+                    print(nt, h_ln, h_cnt, sep="\t", file=fh)
+
     print("Homopolymers binned.", file=sys.stderr)
     # NucFlag overlap
     plot_homopolymers_stacked(
-        homopolymer_bins, os.path.join(f"{args.plot_prefix}_ovl_stacked")
+        homopolymer_bins,
+        os.path.join(f"{args.plot_prefix}_ovl_stacked"),
+        ylim=args.ylim_ovl_stacked,
     )
     plot_homopolymers_split(
         homopolymer_bins,

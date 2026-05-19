@@ -28,6 +28,7 @@ rule label_lcr_regions_and_pos:
     output:
         bed=join(OUTPUT_DIR, "homopolymers", "{sm}_homopolymers.bed.gz"),
         bins=join(OUTPUT_DIR, "homopolymers", "{sm}_bin_cnts.tsv"),
+        bins_all=join(OUTPUT_DIR, "homopolymers", "{sm}_bin_cnts_all.tsv"),
         plots=[
             join(OUTPUT_DIR, "homopolymers", "{sm}_ovl_stacked.png"),
             join(OUTPUT_DIR, "homopolymers", "{sm}_ovl_split.png"),
@@ -47,6 +48,8 @@ rule label_lcr_regions_and_pos:
         -r {input.ref} \
         -c {input.calls} \
         -b {output.bins} \
+        -a {output.bins_all} \
+        --ylim_ovl_stacked '(0, 5500)' \
         -p {params.plot_prefix} | bgzip > {output.bed}
         """
 

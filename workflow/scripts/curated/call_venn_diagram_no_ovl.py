@@ -97,26 +97,24 @@ def main():
             )
 
     ovl_counts: Counter[str] = Counter()
-    all_ovls = set()
     file_handles: dict[str, TextIO] = {}
     nucflag_homopolymer_ovl_name_counts: Counter[tuple[str, ...]] = Counter()
     for chrom, itrees in itree_calls.items():
         itv: Interval
         ovl: set[Interval]
+        ignore_itvs = set()
         for itv in itrees.iter():
-            ovl = itrees.overlap(itv)
-            # Sort all intervals into immutable tuple
-            # Check if used combination.
-            # NOTE: This will still report multiple overlaps.
-            # NF   |-| |-|
-            # INSP |-| |-|
-            # FLG   |--|
-            # Example: In this case, Flagger has two counts.
-            ovl_sorted: tuple[Interval, ...] = tuple(sorted(set(itv for itv in ovl)))
-            if ovl_sorted in all_ovls:
+            if itv in ignore_itvs:
                 continue
+            ovl = itrees.overlap(itv)
+            # Check if used itv.
+            filt_ovl: set[Interval] = set(itv for itv in ovl if itv not in ignore_itvs)
+            if not filt_ovl:
+                continue
+            ignore_itvs.update(filt_ovl)
+
             # Then create overlap name.
-            ovl_name = sorted(set(itv.data[1] for itv in ovl_sorted))
+            ovl_name = sorted(set(itv.data[1] for itv in filt_ovl))
             ovl_name_joined: str = "-".join(ovl_name)
             if not file_handles.get(ovl_name_joined):
                 file_handles[ovl_name_joined] = open(
@@ -127,20 +125,18 @@ def main():
                 chrom,
                 *[
                     f"{oitv.begin}\t{oitv.end}\t{oitv.data[0]}\t{oitv.data[1]}"
-                    for oitv in ovl
+                    for oitv in filt_ovl
                 ],
                 sep="\t",
                 file=fh,
             )
-
-            # Count when non-homopolymer
+            # Count when homopolymer
             if itv.data[1] == "nucflag" and itv.data[0] == "homopolymer":
                 nucflag_homopolymer_ovl_name_counts[
                     tuple(RENAME_TOOLS[tool] for tool in ovl_name)
                 ] += 1
 
             ovl_counts[ovl_name_joined] += 1
-            all_ovls.add(ovl_sorted)
 
     for fh in file_handles.values():
         fh.close()
@@ -189,7 +185,11 @@ def main():
     for ptch in total_bar_cont.patches:
         width = ptch.get_width()
         total_labels.append(int(width))
-    ax_totals.bar_label(total_bar_cont, total_labels, fontsize=8)
+    ax_totals.bar_label(
+        total_bar_cont,
+        total_labels,
+        fontsize=8,
+    )
 
     # Add stacked bar. We cannot use existing implementation because we don't have a grouping var.
     ax_intersections: Axes = subplots["intersections"]
