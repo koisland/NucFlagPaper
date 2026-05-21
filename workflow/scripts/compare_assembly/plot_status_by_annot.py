@@ -158,6 +158,7 @@ def main():
         horizontalalignment="left",
         verticalalignment="center",
     )
+    df_all.write_csv(f"{args.output_prefix}.tsv", separator="\t")
     fig.savefig(f"{args.output_prefix}.png", bbox_inches="tight", dpi=300)
     fig.savefig(f"{args.output_prefix}.pdf", bbox_inches="tight", dpi=300)
     fig_legend.savefig(f"{args.output_prefix}_legend.png", bbox_inches="tight", dpi=300)

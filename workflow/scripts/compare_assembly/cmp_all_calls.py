@@ -111,12 +111,14 @@ def main():
         itemRgb=pl.col("itemRgb").map_batches(rgb_to_hex, return_dtype=pl.String),
     )
     name_colors = dict(df_all.select("name", "itemRgb").iter_rows())
+    df_all_grouped = df_all.group_by(["lbl", "name"]).agg(pl.col("length").sum())
     draw_bar_all(
-        df_all.group_by(["lbl", "name"]).agg(pl.col("length").sum()),
+        df_all_grouped,
         label_colors=dict(zip(args.labels, args.colors, strict=True)),
         name_colors=name_colors,
         output_prefix=args.output_prefix,
     )
+    df_all_grouped.write_csv(f"{args.output_prefix}.tsv", separator="\t")
 
 
 if __name__ == "__main__":

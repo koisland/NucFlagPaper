@@ -15,7 +15,9 @@ rule plot_compare_misassemblies:
             for sm in ASM_COLORS.keys()
         ],
     output:
-        plot=multiext(join(OUTPUT_DIR, "nucflag", "all_calls_compared"), ".png", ".pdf"),
+        plot=multiext(
+            join(OUTPUT_DIR, "nucflag", "all_calls_compared"), ".png", ".pdf", ".tsv"
+        ),
     params:
         script="workflow/scripts/compare_assembly/cmp_all_calls.py",
         calls=lambda wc, input: " ".join(
@@ -32,6 +34,41 @@ rule plot_compare_misassemblies:
     shell:
         """
         python {params.script} -i {params.calls} -l {params.labels} -c {params.colors} -o {params.output_prefix}
+        """
+
+
+rule aggregate_call_num:
+    input:
+        calls=[
+            expand(
+                rules.nf_denovo_check_asm_nucflag.output.misassemblies,
+                sm=f"{sm}_hifi",
+            )
+            for sm in ASM_COLORS.keys()
+        ],
+        lengths=rules.plot_compare_misassemblies.output[2],
+    output:
+        status=join(OUTPUT_DIR, "nucflag", "agg_errors.tsv"),
+    shell:
+        """
+        awk -v OFS="\\t" 'FNR > 1 {{
+            if ($4 == "#chrom") {{ next; }}
+            match(FILENAME, "([^\\/]+)_hifi", arr);
+            print $4, arr[1]
+        }}' {input.calls} | \
+        sort -k2,2 -k1,1 | \
+        uniq -c | \
+        awk -v OFS="\\t" '{{ print $2, $3, $1 }}' > {output.status}.tmp
+        # Join to add based on type and assembly
+        join -a 1 \
+            <(sort -k1,1 -k2,2 {output.status}.tmp | awk -v OFS="\\t" '{{ print $1"~"$2, $3 }}') \
+            <(awk 'NR > 1 {{ print $2"~"$1, $3 }}' {input.lengths} | sort -k1,1 -k2,2) | \
+        awk -v OFS="\\t" '{{
+            split($1, arr, "~");
+            $1=$1;
+            print arr[1], arr[2], $2, $3
+        }}' > {output.status}
+        rm -f {output.status}.tmp
         """
 
 
@@ -110,6 +147,7 @@ rule plot_qv_liftover_length_by_annot:
             join(OUTPUT_DIR, "nucflag", "all_status_breakdown_by_{annot}"),
             ".png",
             ".pdf",
+            ".tsv",
         ),
     params:
         script="workflow/scripts/compare_assembly/plot_status_by_annot.py",
@@ -140,3 +178,4 @@ rule compare_all:
             annot=["segdups", "censat"],
             sm=ASM_COLORS.keys(),
         ),
+        rules.aggregate_call_num.output,

@@ -49,7 +49,7 @@ def add_slashes(ax1: Axes, ax2: Axes):
             ytickline.set_visible(False)
 
 
-def dunn_test(df_nt_bins: pl.DataFrame) -> dict[tuple[str, str], float]:
+def compare_homopolymer_bins(df_nt_bins: pl.DataFrame) -> dict[tuple[str, str], float]:
     dfs_nt_label_bins = df_nt_bins.partition_by(["label"], as_dict=True)
     for lbl, df_vals in dfs_nt_label_bins.items():
         lbl = lbl[0]
@@ -138,7 +138,7 @@ def draw_plot_all(
     alpha = 0.05
     ax1 = axes[0]
     ax2 = axes[1]
-    res_map = dunn_test(df_bins)
+    res_map = compare_homopolymer_bins(df_bins)
 
     for ax, ylim in (
         (ax1, ylims[0]),
@@ -285,7 +285,7 @@ def main():
         ax1 = axes[0, i]
         ax2 = axes[1, i]
         df_nt_bins = df_bins.filter(pl.col("nt") == nt)
-        res_map = dunn_test(df_nt_bins)
+        res_map = compare_homopolymer_bins(df_nt_bins)
 
         ax1.set_title(nt, fontsize=18)
 

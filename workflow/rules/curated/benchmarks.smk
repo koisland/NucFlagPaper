@@ -75,6 +75,55 @@ rule plot_call_venn:
         """
 
 
+rule aggregate_call_num:
+    input:
+        nucflag=expand(
+            rules.versioned_check_asm_nucflag.output.misassemblies,
+            sm=[f"HG002_{version}" for version in ASSEMBLIES.keys()],
+        ),
+        flagger=expand(
+            rules.versioned_run_flagger.output,
+            sm=[f"HG002_{version}" for version in ASSEMBLIES.keys()],
+        ),
+        inspector=expand(
+            rules.versioned_merge_calls.output,
+            sm=[f"HG002_{version}" for version in ASSEMBLIES.keys()],
+        ),
+        deepvariant=expand(
+            rules.versioned_filter_vcf_calls.output,
+            sm=[f"HG002_{version}" for version in ASSEMBLIES.keys()],
+        ),
+    output:
+        tsv=join(OUTPUT_DIR, "summary", "agg_errors.tsv"),
+    params:
+        nucflag_name=TOOLS["nucflag"],
+        flagger_name=TOOLS["flagger"],
+        inspector_name=TOOLS["inspector"],
+        deepvariant_name=TOOLS["deepvariant"],
+    shell:
+        """
+        cat <(awk -v OFS="\\t" '{{
+                if ($4 == "name") {{ next; }}
+                match(FILENAME, "(v[0-9\\.]+)[._/]", arr);
+                print $4, "{params.nucflag_name}", arr[1]
+            }}' {input.nucflag} | sort -k2,2 -k3,3 -k1,1 | uniq -c) \
+            <(awk -v OFS="\\t" '{{
+                if ($4 == "itemRgb=\\"On\\"") {{ next; }}
+                match(FILENAME, "(v[0-9\\.]+)[._/]", arr);
+                print $4, "{params.flagger_name}", arr[1]
+            }}' {input.flagger} | sort -k2,2 -k3,3 -k1,1 | uniq -c) \
+            <(awk -v OFS="\\t" '{{
+                match(FILENAME, "(v[0-9\\.]+)[._/]", arr);
+                print $4, "{params.inspector_name}", arr[1]
+            }}' {input.inspector} | sort -k2,2 -k3,3 -k1,1 | uniq -c) \
+            <(awk -v OFS="\\t" '{{
+                match(FILENAME, "(v[0-9\\.]+)[._/]", arr);
+                print $4, "{params.deepvariant_name}", arr[1]
+            }}' {input.deepvariant} | sort -k2,2 -k3,3 -k1,1 | uniq -c) | \
+        awk -v OFS="\\t" '{{ print $2, $3" "$4, $5, $1 }}' > {output}
+        """
+
+
 rule plot_stats_f1_all:
     input:
         summaries=[
@@ -124,3 +173,4 @@ rule benchmarks_all:
             tool=TOOLS.keys(),
         ),
         rules.plot_stats_f1_all.output,
+        rules.aggregate_call_num.output,

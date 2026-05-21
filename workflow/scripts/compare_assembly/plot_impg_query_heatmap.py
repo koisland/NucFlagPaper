@@ -253,13 +253,14 @@ def main():
 
         figs[rchrom] = (fig, axes)
 
+    rows_ovl_itvs = []
     for grp, df_grp in df_liftover.group_by(["ritv"]):
         rchrom, ritv = grp[0].split(":")
         rst, rend = ritv.split("-")
         rst, rend = int(rst), int(rend)
         print(f"On {rchrom}:{rst}-{rend}", file=sys.stderr)
         fig, axes = figs[rchrom]
-        rlabel, _ = rchrom.rsplit("_")
+        rlabel, rother = rchrom.rsplit("_")
         ax_ref: Axes = axes[label_order[rlabel]]
 
         itree_ref = itrees_calls.get(rchrom)
@@ -338,8 +339,25 @@ def main():
             at_ctg_end = any(itv.begin == 0 or itv.end == ctg_end for itv in ovl)
             if at_ctg_end:
                 color = CTG_BRK_COLOR
+                hexcode = "#000000"
             else:
                 color = CMAP(NORM(prop_calls))
+                hexcode = matplotlib.colors.rgb2hex(color)
+
+            all_calls = ",".join(itv.data for itv in ovl)
+            rows_ovl_itvs.append(
+                (
+                    rother,
+                    row["rst"],
+                    row["rend"],
+                    f"{row['qlabel']}:{all_calls}",
+                    prop_calls,
+                    ".",
+                    row["rst"],
+                    row["rend"],
+                    hexcode,
+                )
+            )
             ax.axvspan(row["rst"], row["rend"], color=color)
 
     for rchrom, (fig, axes) in figs.items():
@@ -428,6 +446,9 @@ def main():
     output_prefix_ovl = os.path.join(args.output_dir, "ovl_legend")
     fig_ovl_legend.savefig(f"{output_prefix_ovl}.png", bbox_inches="tight", dpi=300)
     fig_ovl_legend.savefig(f"{output_prefix_ovl}.pdf", bbox_inches="tight", dpi=300)
+    pl.DataFrame(rows_ovl_itvs, orient="row").write_csv(
+        f"{output_prefix_ovl}.bed", separator="\t", include_header=False
+    )
 
 
 if __name__ == "__main__":
