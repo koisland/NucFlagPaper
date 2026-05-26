@@ -69,6 +69,7 @@ def main():
             x="Method",
             y="QV",
             hue="label",
+            hue_order=list(args.labels),
             order=["Merqury", "NucFlag"],
             palette=colors,
             ax=ax,

@@ -156,8 +156,6 @@ rule generate_ideogram_all:
     params:
         script="workflow/scripts/nonhuman/draw_all_ideogram.py",
         output_prefix=lambda wc, output: splitext(output[0])[0],
-        labels=" ".join(DATA.keys()),
-        colors=" ".join(f"'{DATA[sm].get("color")}'" for sm in DATA.keys()),
     shell:
         """
         python {params.script} \
@@ -176,8 +174,6 @@ rule generate_ideogram_all:
             print $1, $3, $4, ".", "gneg"
         }}') \
         -r <(awk -v OFS="\\t" '{{ print $1, "Chromosome "FNR }}' {input.bed_cen}) \
-        -c {params.colors} \
-        -l {params.labels} \
         -o {params.output_prefix}
         """
 
@@ -213,30 +209,101 @@ rule agg_qv_stats_against_reported:
         """
 
 
-rule intersect_cen:
+rule create_groups:
     input:
         bed_cen=lambda wc: DATA[wc.sm.split("_")[0]]["bed_centromeres"],
-        bed_calls=rules.check_asm_nucflag.output.misassemblies,
+        fai=lambda wc: expand(
+            rules.download_data.output.data, sm=wc.sm.split("_")[0], dtype="assembly"
+        )[0]
+        + ".fai",
     output:
-        bed_calls_cen=pipe(join(OUTPUT_DIR, "{sm}_cens.bed")),
+        bed_groups=join(OUTPUT_DIR, "{sm}_groups.bed"),
     conda:
         "../../envs/tools.yaml"
     shell:
         """
-        bedtools intersect -a {input.bed_calls} -b {input.bed_cen} > {output}
+        cat <(awk -v OFS="\\t" '{{ print $0, "cen"}}' {input.bed_cen}) \
+            <(bedtools subtract \
+                -a <(awk -v OFS="\\t" '{{ print $1, 0, $2 }}' {input.fai}) \
+                -b {input.bed_cen} | \
+              awk -v OFS="\\t" '{{ print $0, "uniq" }}') > {output.bed_groups}
+        """
+
+
+rule status_groups:
+    input:
+        bed_calls=rules.check_asm_nucflag.output.misassemblies,
+        bed_groups=rules.create_groups.output,
+    output:
+        status_region=join(OUTPUT_DIR, "{sm}_status_regions_{mode}.bed"),
+        status_grp=join(OUTPUT_DIR, "{sm}_status_grps_{mode}.bed"),
+    conda:
+        "../Snakemake-NucFlag/workflow/env/nucflag.yaml"
+    shell:
+        """
+        nucflag status \
+        -i {input.bed_calls} \
+        -b {input.bed_groups} \
+        -g name \
+        -m {wildcards.mode} > {output.status_grp}
+        nucflag status \
+        -i {input.bed_calls} \
+        -b {input.bed_groups} \
+        -m {wildcards.mode} > {output.status_region}
         """
 
 
 rule agg_calls_cen:
     input:
-        expand(rules.intersect_cen.output, sm=SAMPLES_HIFI),
+        rgns=lambda wc: expand(
+            rules.status_groups.output.status_region, sm=SAMPLES_HIFI, mode=wc.mode
+        ),
+        grps=lambda wc: expand(
+            rules.status_groups.output.status_grp, sm=SAMPLES_HIFI, mode=wc.mode
+        ),
     output:
-        bed_calls_cen=join(OUTPUT_DIR, "all_cens_status.bed"),
+        bed_calls_rgns=join(OUTPUT_DIR, "all_groups_status_{mode}_rgns.bed"),
+        bed_calls_grps=join(OUTPUT_DIR, "all_groups_status_{mode}_grps.bed"),
     conda:
-        "../Snakemake-NucFlag/workflow/env/nucflag.yaml"
+        "../../envs/tools.yaml"
     shell:
         """
-        nucflag status -i <(cat {input}) > {output}
+        awk -v OFS="\\t" '{{
+            match(FILENAME, "([^/]*?).bed", arr);
+            if (NR == 1) {{ print $0, "file" }}
+            else if (FNR == 1) {{ next }}
+            else {{ print $0, arr[1] }}
+        }}' {input.rgns} > {output.bed_calls_rgns}
+        awk -v OFS="\\t" '{{
+            match(FILENAME, "([^/]*?).bed", arr);
+            if (NR == 1) {{ print $0, "file" }}
+            else if (FNR == 1) {{ next }}
+            else {{ print $0, arr[1] }}
+        }}' {input.grps} > {output.bed_calls_grps}
+        """
+
+
+rule plot_agg_calls_cen:
+    input:
+        bed_calls_grps=rules.agg_calls_cen.output.bed_calls_grps,
+        nucflag_colors="config/nucflag_colors.tsv",
+    output:
+        multiext(join(OUTPUT_DIR, "all_groups_status_{mode}_rgns"), ".pdf", ".png"),
+    conda:
+        "../../envs/tools.yaml"
+    params:
+        script="workflow/scripts/nonhuman/draw_stacked_bar_grps.py",
+        output_prefix=lambda wc, output: splitext(output[0])[0],
+        labels=" ".join(DATA.keys()),
+        colors=" ".join(f"'{DATA[sm].get("color")}'" for sm in DATA.keys()),
+    shell:
+        """
+        python {params.script} \
+        -i {input.bed_calls_grps} \
+        -l {params.labels} \
+        -c {params.colors} \
+        -o {params.output_prefix} \
+        -k {input.nucflag_colors}
         """
 
 
@@ -247,5 +314,6 @@ rule all:
         expand(rules.calculate_qv.output, sm=SAMPLES_HIFI),
         expand(rules.asm_ref_SafFire.output.bed, ref=REFERENCE, sm=SAMPLES_NO_REF),
         rules.generate_ideogram_all.output,
-        rules.agg_calls_cen.output,
+        expand(rules.agg_calls_cen.output, mode=["count", "length"]),
+        expand(rules.plot_agg_calls_cen.output, mode=["count"]),
         rules.agg_qv_stats_against_reported.output,

@@ -1,0 +1,15 @@
+collapse	0,255,0
+correct	206,206,206
+deletion	248,244,255
+dinucleotide	0,49,83
+false_dup	0,0,255
+het_or_mismap	121,133,100
+homopolymer	236,236,0
+insertion	128,0,128
+low_quality	0,128,0
+misjoin	191,26,46
+mismatch	255,128,0
+other_repeat	155,118,83
+simple_repeat	255,0,128
+softclip	0,255,255
+scaffold	0,0,0

@@ -55,9 +55,9 @@ def compare_homopolymer_bins(df_nt_bins: pl.DataFrame) -> dict[tuple[str, str], 
         lbl = lbl[0]
         nres = normaltest(df_vals["len"])
         assert nres.pvalue < 0.05, "One of labels is normally distributed"
-        dim = df_vals.filter(pl.col("len") == pl.col("len").mean().cast(pl.Int64)).shape
-        print(f"{lbl} mean length: {df_vals['len'].mean()} ({dim[0]})", file=sys.stderr)
-        print(f"{lbl}: {nres}", file=sys.stderr)
+        # dim = df_vals.filter(pl.col("len") == pl.col("len").mean().cast(pl.Int64)).shape
+        # print(f"{lbl} mean length: {df_vals['len'].mean()} ({dim[0]})", file=sys.stderr)
+        # print(f"{lbl}: {nres}", file=sys.stderr)
 
     # Use Komologorov-smirnov test and post-hoc analysis to determine if any difference between homopolymer distributions.
     # We use this instead of our original kruskal wallis as the distribution is compared rather than just the median.
@@ -74,8 +74,8 @@ def compare_homopolymer_bins(df_nt_bins: pl.DataFrame) -> dict[tuple[str, str], 
 
     # Requires list for some reason
     adj_pvals = false_discovery_control(list(pvals.values()))
-    print(pvals, file=sys.stderr)
-    print(adj_pvals, file=sys.stderr)
+    # print(pvals, file=sys.stderr)
+    # print(adj_pvals, file=sys.stderr)
     return {
         lbl: adj_pval
         for (lbl, pval), adj_pval in zip(pvals.items(), adj_pvals, strict=True)
@@ -330,9 +330,17 @@ def main():
         ylim = (ymin, ymax - 12)
         for (label_1, label_2), p in res_map.items():
             if p > alpha:
+                print(
+                    f"No significant difference between {nt} {label_1} and {label_2} with {p=}",
+                    file=sys.stderr,
+                )
                 continue
             x1 = label_idxs[label_1]
             x2 = label_idxs[label_2]
+            print(
+                f"(*) Significant difference between {nt} {label_1} and {label_2} with {p=}",
+                file=sys.stderr,
+            )
             draw_signif_brackets(ax=ax1, x1=x1, x2=x2, level=level, ylim=ylim, p=p)
             level += 2
 
