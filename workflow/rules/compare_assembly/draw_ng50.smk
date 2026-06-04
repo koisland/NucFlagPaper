@@ -1,5 +1,20 @@
 
 
+rule calculate_stats:
+    input:
+        asm=[get_assembly(sm) for sm in ASM_COLORS.keys()],
+    output:
+        stats=join(OUTPUT_DIR, "ng50", "seq_stats.tsv"),
+    params:
+        script="workflow/scripts/compare_assembly/seq_stats.py",
+    conda:
+        "../../envs/curated.yaml"
+    shell:
+        """
+        python {params.script} {input.asm} -r > {output.stats}
+        """
+
+
 rule draw_ng50:
     input:
         fai=[get_assembly(sm) + ".fai" for sm in ASM_COLORS.keys()],

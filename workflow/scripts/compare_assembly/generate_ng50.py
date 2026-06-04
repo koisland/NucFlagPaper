@@ -30,6 +30,7 @@ def main():
     ap.add_argument("-i", "--input_fai", type=str, nargs="+")
     ap.add_argument("-l", "--labels", type=str, nargs="+")
     ap.add_argument("-c", "--colors", type=str, nargs="+")
+    ap.add_argument("-g", "--genome_size", type=int, default=3_098_794_149)
     ap.add_argument("-o", "--output_prefix", type=str, default="out")
     args = ap.parse_args()
 
@@ -50,10 +51,7 @@ def main():
             .sort(by="contig_length", descending=True)
             .with_columns(
                 contig_length=pl.col("contig_length") / 1_000_000,
-                coverage=(
-                    pl.col("contig_length").cum_sum() / pl.col("contig_length").sum()
-                )
-                * 100,
+                coverage=(pl.col("contig_length").cum_sum() / args.genome_size) * 100,
             )
         )
 

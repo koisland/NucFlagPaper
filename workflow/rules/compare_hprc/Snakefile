@@ -62,6 +62,23 @@ rule download_aligned_bams:
         """
 
 
+rule calculate_release_ng50:
+    input:
+        asm=lambda wc: expand(
+            rules.download_assemblies.output.asm, sm=DATA.keys(), release=wc.release
+        ),
+    output:
+        stats=join(OUTPUT_DIR, "ng50", "seq_stats_{release}.tsv"),
+    params:
+        script="workflow/scripts/compare_assembly/seq_stats.py",
+    conda:
+        "../../envs/curated.yaml"
+    shell:
+        """
+        python {params.script} {input.asm} -r > {output.stats}
+        """
+
+
 rule run_nucflag:
     input:
         bam=rules.download_aligned_bams.output.bam,
@@ -203,6 +220,7 @@ rule all:
             sm=DATA.keys(),
             release=RELEASES,
         ),
+        expand(rules.calculate_release_ng50.output, release=RELEASES),
         rules.plot_qv_comparison.output,
         rules.plot_err_comparison.output,
         rules.smn_all.input,

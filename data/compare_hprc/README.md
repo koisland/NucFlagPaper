@@ -1,6 +1,10 @@
 # Data
 * `hprc_all_manifest.csv`
     * Merged from all inputs below.
+    * Convert from wide to long:
+        ```bash
+        python -c 'import polars as pl; pl.read_csv("hprc_all_manifest.csv").unpivot(index=["sample", "release"], variable_name="Datatype", value_name="Source").with_columns(Version=pl.lit("N/A"), Datatype="HPRC_" + pl.col("release") + "_" + pl.col("Datatype")).select("sample", "Datatype", "Version", "Source").write_csv("hprc_all_manifest_long.tsv", separator="\t", include_header=False)'
+        ```
 * `hprc_r1_hifi_alignments.csv`
     * From Julian Lucas
 * `hprc_r2_hifi_alignments.csv`

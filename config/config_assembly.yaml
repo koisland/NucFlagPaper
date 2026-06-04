@@ -26,7 +26,7 @@ samples:
       hifi:
         path: /project/logsdon_shared/data/reference/CHM13/raw_data/hifi
         # Gunzip due to bug in verkko
-        include: ["*.fastq.gz.fastq"]
+        include: ["*.fastq.gz"]
   CHM13_verkko_2.3:
     threads: 40
     assembler: verkko
@@ -40,4 +40,4 @@ samples:
       hifi:
         path: /project/logsdon_shared/data/reference/CHM13/raw_data/hifi
         # Gunzip due to bug in verkko
-        include: ["*.fastq.gz.fastq"]
+        include: ["*.fastq.gz"]

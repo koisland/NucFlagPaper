@@ -59,18 +59,16 @@ def compare_homopolymer_bins(df_nt_bins: pl.DataFrame) -> dict[tuple[str, str], 
         # print(f"{lbl} mean length: {df_vals['len'].mean()} ({dim[0]})", file=sys.stderr)
         # print(f"{lbl}: {nres}", file=sys.stderr)
 
-    # Use Komologorov-smirnov test and post-hoc analysis to determine if any difference between homopolymer distributions.
+    # Use Komologorov-smirnov test and post-hoc analysis to determine if one assembly has more homopolymer errors than another assembly.
     # We use this instead of our original kruskal wallis as the distribution is compared rather than just the median.
-    # H_0 - The homopolymer length distribution of two labels is identical
     # https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.kstest.html
     pvals = {}
     for lbl, df in dfs_nt_label_bins.items():
         lbl = lbl[0]
         for lbl2, df2 in dfs_nt_label_bins.items():
             lbl2 = lbl2[0]
-            lbls = sorted((lbl, lbl2))
-            res = ks_2samp(df["len"], df2["len"])
-            pvals[tuple(lbls)] = res.pvalue
+            res = ks_2samp(df["len"], df2["len"], alternative="greater")
+            pvals[(lbl, lbl2)] = res.pvalue
 
     # Requires list for some reason
     adj_pvals = false_discovery_control(list(pvals.values()))
@@ -337,8 +335,9 @@ def main():
                 continue
             x1 = label_idxs[label_1]
             x2 = label_idxs[label_2]
+            # The alternative is that F(x) > G(x) for at least one x.
             print(
-                f"(*) Significant difference between {nt} {label_1} and {label_2} with {p=}",
+                f"(*) Significant difference for {nt} where {label_2} has more error homopolymers at some homopolymer length than {label_1} with {p=}",
                 file=sys.stderr,
             )
             draw_signif_brackets(ax=ax1, x1=x1, x2=x2, level=level, ylim=ylim, p=p)

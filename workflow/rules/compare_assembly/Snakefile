@@ -130,6 +130,7 @@ rule all:
         rules.cmp_homopolymers_all.input,
         rules.nf_denovo_nucflag.input,
         rules.draw_ng50.output,
+        rules.calculate_stats.output,
         rules.liftover_all.input,
         rules.compare_all.input,
         rules.cenmap_all.input,
