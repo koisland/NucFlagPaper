@@ -86,18 +86,13 @@ def main():
         .unnest("mtch")
     )
 
-    # Split into groups by release and AFR/Non-AFR
-    colors = {
-        0: args.color_a,
-        1: args.color_a,
-        2: args.color_b,
-        3: args.color_b,
-    }
     labels = {
-        0: f"{args.label_a}\nAFR",
-        1: f"{args.label_a}\nNon-AFR",
-        2: f"{args.label_b}\nAFR",
-        3: f"{args.label_b}\nNon-AFR",
+        0: args.label_a,
+        1: args.label_b,
+    }
+    colors = {
+        args.label_a: args.color_a,
+        args.label_b: args.color_b,
     }
     df_metadata = pl.read_csv(args.metadata, separator="\t", has_header=True)
     df_qvs = pl.concat([df_qv_a, df_qv_b]).join(
@@ -117,34 +112,23 @@ def main():
             ((pl.col("end") - pl.col("start")) / 1_000_000).alias("Length (Mbp)"),
         )
         .with_columns(
-            # Assign id for each group between release and afr/non-afr
-            group=pl.when(pl.col("lbl").eq("a"))
-            .then(
-                pl.when(pl.col("Sample").eq(pl.lit("AFR")))
-                .then(pl.lit(0))
-                .otherwise(pl.lit(1))
-            )
-            .otherwise(
-                pl.when(pl.col("Sample").eq(pl.lit("AFR")))
-                .then(pl.lit(2))
-                .otherwise(pl.lit(3))
-            )
+            group=pl.when(pl.col("lbl").eq("a")).then(pl.lit(0)).otherwise(pl.lit(1))
         )
         .with_columns(
             # make a numerical column and add some jitter
             # https://stackoverflow.com/a/75541978
             x=pl.col("group") + np.random.uniform(-0.1, 0.1, len(df_qvs)),
-            lbl=pl.col("group").cast(pl.String).replace(labels),
+            Group=pl.col("group").cast(pl.String).replace(labels),
         )
     )
 
     g = sns.catplot(
         data=df_qvs,
-        x="lbl",
+        x="Group",
         y="qv",
-        hue="group",
-        hue_order=list(range(4)),
-        order=labels.values(),
+        hue="Group",
+        hue_order=colors.keys(),
+        order=colors.keys(),
         inner="quart",
         palette=colors,
         legend=None,
@@ -152,6 +136,7 @@ def main():
         density_norm="count",
         height=8,
         aspect=1,
+        alpha=0.7,
     )
     ax: Axes = g.ax
     # https://stackoverflow.com/a/70715319
@@ -171,13 +156,12 @@ def main():
         data=df_qvs,
         x="x",
         y="qv",
-        hue="Sample",
+        hue="Group",
         size="Length (Mbp)",
         sizes=(1, 800),
         linewidth=0.5,
         edgecolor="black",
-        hue_order=["AFR", "Non-AFR"],
-        palette={"AFR": "orange", "Non-AFR": "gray"},
+        palette=colors,
         ax=ax,
     )
     ax.set_xlabel(None)
@@ -187,10 +171,10 @@ def main():
     for spine in ("top", "right"):
         ax.spines[spine].set_visible(False)
 
-    df_qvs = df_qvs.with_columns(lbl=pl.col("lbl").str.replace("\n", " "))
+    df_qvs = df_qvs.with_columns(Group=pl.col("Group").str.replace("\n", " "))
 
     peak_rows = []
-    for grp, df_grp in df_qvs.group_by(["lbl"]):
+    for grp, df_grp in df_qvs.group_by(["Group"]):
         counts = df_grp["qv"].round().value_counts().sort(by="qv")
         peaks, props = find_peaks(counts["count"], height=10)
         for pk, ht in zip(peaks, props["peak_heights"]):
@@ -199,7 +183,7 @@ def main():
     df_peaks = pl.DataFrame(
         peak_rows,
         orient="row",
-        schema={"qv": pl.Float32, "ht": pl.Int32, "lbl": pl.String},
+        schema={"qv": pl.Float32, "ht": pl.Int32, "Group": pl.String},
         infer_schema_length=None,
     )
     df_peaks.write_csv(
@@ -209,7 +193,7 @@ def main():
     sns.move_legend(
         ax, loc="center", fontsize=18, bbox_to_anchor=(1.125, 0.5), **LEGEND_KWARGS
     )
-    df_qvs_summary = df_qvs.group_by(["lbl"]).agg(
+    df_qvs_summary = df_qvs.group_by(["Group"]).agg(
         perc_25=pl.col("qv").quantile(0.25),
         median=pl.col("qv").median(),
         mean=pl.col("qv").mean(),

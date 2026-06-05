@@ -150,7 +150,7 @@ rule plot_qv_comparison:
         script="workflow/scripts/compare_hprc/plot_qv_compare.py",
         output_prefix=lambda wc, output: splitext(output.qv)[0],
     conda:
-        "../../envs/tools.yaml"
+        "../../envs/curated.yaml"
     shell:
         """
         python {params.script} \

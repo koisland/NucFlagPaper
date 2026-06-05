@@ -35,14 +35,14 @@ POP_GROUP_COLORS = {
     "AFR": "orange",
     "Non-AFR": "gray",
 }
-LARGE_ERRORS = {
+LARGE_ERRORS = (
     "false_dup",
     "misjoin",
     "collapse",
     "scaffold",
     "softclip",
-}
-SMALL_ERRORS = {
+)
+SMALL_ERRORS = (
     "insertion",
     "deletion",
     "homopolymer",
@@ -52,7 +52,7 @@ SMALL_ERRORS = {
     "mismatch",
     "low_quality",
     "het_or_mismap",
-}
+)
 plt.rcParams["font.family"] = "Arial"
 
 
@@ -76,6 +76,7 @@ def draw_combined_err_diff(
     df_filtered = df
     if include_all:
         x_order = ["all", *LARGE_ERRORS, *SMALL_ERRORS]
+        name_colors = {"all": "#808080", **name_colors}
     else:
         x_order = [*LARGE_ERRORS, *SMALL_ERRORS]
         df_filtered = df.filter(pl.col("name").ne("all"))
@@ -84,33 +85,26 @@ def draw_combined_err_diff(
         data=df_filtered,
         x="name",
         y=col,
-        hue="pop_group",
-        palette=POP_GROUP_COLORS,
+        hue="name",
+        palette=name_colors,
         order=x_order,
-        legend="full",
-        hue_order=POP_GROUP_COLORS.keys(),
+        legend=None,
         ax=ax_fig,
     )
     for cont in ax_fig.containers:
+        kwargs = {}
         if by == "length":
-            ax_fig.bar_label(
-                cont,
-                fontsize=12,
-                fmt=lambda length: f"{length / 1_000_000:.1f}",
-                label_type="center",
-                path_effects=[pe.withStroke(linewidth=2.0, foreground="white")],
-                padding=3,
-            )
-        else:
-            ax_fig.bar_label(
-                cont,
-                fontsize=12,
-                label_type="edge",
-                path_effects=[pe.withStroke(linewidth=2.0, foreground="white")],
-                padding=3,
-            )
+            kwargs = {"fmt": lambda length: f"{length / 1_000_000:.1f}"}
 
-    # Make symmetric
+        ax_fig.bar_label(
+            cont,
+            fontsize=12,
+            label_type="center",
+            path_effects=[pe.withStroke(linewidth=2.0, foreground="white")],
+            padding=3,
+            **kwargs,
+        )
+
     ylim_max = max(abs(df_filtered[col].min()), abs(df_filtered[col].max()))
     # Add 10% of max as buffer
     ylim_max += 0.1 * ylim_max
@@ -135,9 +129,9 @@ def draw_combined_err_diff(
         label.set_horizontalalignment("right")
         label.set_rotation_mode("anchor")
 
-    sns.move_legend(
-        ax_fig, loc="upper right", title_fontsize=24, fontsize=18, **LEGEND_KWARGS
-    )
+    # sns.move_legend(
+    #     ax_fig, loc="upper right", title_fontsize=24, fontsize=18, **LEGEND_KWARGS
+    # )
 
     name_fig.savefig(f"{output_prefix}_combined.png", bbox_inches="tight", dpi=300)
     name_fig.savefig(f"{output_prefix}_combined.pdf", bbox_inches="tight", dpi=300)
@@ -312,7 +306,7 @@ def main():
         .join(df_metadata, left_on="sample", right_on="Sample ID", how="left")
     )
     df_cmp_name_ab = (
-        df_cmp_ab.group_by(["name", "pop_group"])
+        df_cmp_ab.group_by(["name"])
         .agg(
             a=pl.col("length_a").sum(),
             a_count=pl.col("count_a").sum(),
@@ -328,7 +322,7 @@ def main():
     df_cmp_name_ab = pl.concat(
         [
             df_cmp_name_ab,
-            df_cmp_name_ab.group_by("pop_group")
+            df_cmp_name_ab.group_by(None)
             .agg(
                 pl.col("a").sum(),
                 pl.col("a_count").sum(),
@@ -340,7 +334,6 @@ def main():
             )
             .select(
                 "name",
-                "pop_group",
                 "a",
                 "a_count",
                 "b",

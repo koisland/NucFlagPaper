@@ -66,14 +66,14 @@ DUPMASKER_COLORS = {
 }
 # https://humanpangenome.org/samples/
 AFR_POP_LABELS = {"ACB", "GWD", "ESN", "MKK", "LWK", "ASL", "YRI", "MSL", "ASW"}
-LARGE_ERRORS = {
+LARGE_ERRORS = (
     "false_dup",
     "misjoin",
     "collapse",
     "scaffold",
     "softclip",
-}
-SMALL_ERRORS = {
+)
+SMALL_ERRORS = (
     "insertion",
     "deletion",
     "homopolymer",
@@ -83,7 +83,7 @@ SMALL_ERRORS = {
     "mismatch",
     "low_quality",
     "het_or_mismap",
-}
+)
 RELEASE_COLORS = {"Release 1": "red", "Release 2": "blue"}
 
 
@@ -168,7 +168,7 @@ def draw_r1_r2_smn(
         figsize=figsize,
     )
     breaks_counter = defaultdict(Counter)
-    breaks_color = {True: "red", False: "black"}
+    breaks_color = {True: "#ff6500", False: "#000000"}
     breaks_labels = {True: "Break", False: "Complete"}
     for row_offset, annot in enumerate(("nucflag", "dupmasker")):
         df_annot = df_all.filter(pl.col("dtype").eq(pl.lit(annot)))
@@ -278,7 +278,7 @@ def draw_r1_r2_smn(
         ax_nucflag.bar_label(
             cont,
             fontsize=12,
-            label_type="center",
+            label_type="edge",
             path_effects=[pe.withStroke(linewidth=2.0, foreground="white")],
         )
     ax_nucflag.tick_params(axis="both", which="major", labelsize=14)
@@ -348,7 +348,7 @@ def main():
     ap.add_argument("--r1_fai", nargs="+", type=str)
     ap.add_argument("--r2_fai", nargs="+", type=str)
     ap.add_argument("--n_subset", default=10, type=int)
-    ap.add_argument("--seed", default=None, type=int)
+    ap.add_argument("--seed", default=7, type=int)
     ap.add_argument("--output_prefix", default="out", type=str)
     args = ap.parse_args()
 
