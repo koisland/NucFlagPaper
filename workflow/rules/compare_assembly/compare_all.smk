@@ -2,7 +2,7 @@ ANNOT_COLORS = {
     "censat": "config/censat_colors.tsv",
     "segdups": "config/segdups_colors.tsv",
 }
-ANNOT_TITLE = {"censat": "Satellite structure", "segdups": "Segmental duplications"}
+ANNOT_TITLE = {"censat": "Centromere satellites", "segdups": "Segmental duplications"}
 
 
 rule plot_compare_misassemblies:

@@ -143,11 +143,13 @@ rule plot_qv_comparison:
         ),
         metadata=SM_METADATA,
     output:
-        qv=join(OUTPUT_DIR, "plots", "hprc_qv_comparison.tsv"),
-        qv_summary=join(OUTPUT_DIR, "plots", "hprc_qv_comparison_summary.tsv"),
-        png=join(OUTPUT_DIR, "plots", "hprc_qv_comparison.png"),
+        qv=join(OUTPUT_DIR, "plots", "hprc_qv_comparison_{typ}.tsv"),
+        qv_summary=join(OUTPUT_DIR, "plots", "hprc_qv_comparison_{typ}_summary.tsv"),
+        peaks=join(OUTPUT_DIR, "plots", "hprc_qv_comparison_{typ}_peaks.tsv"),
+        png=join(OUTPUT_DIR, "plots", "hprc_qv_comparison_{typ}.png"),
     params:
         script="workflow/scripts/compare_hprc/plot_qv_compare.py",
+        typ="{typ}",
         output_prefix=lambda wc, output: splitext(output.qv)[0],
     conda:
         "../../envs/curated.yaml"
@@ -157,6 +159,7 @@ rule plot_qv_comparison:
         -a <(cat {input.qv_r1}) \
         -b <(cat {input.qv_r2}) \
         -m {input.metadata} \
+        -t {params.typ} \
         -o {params.output_prefix}
         """
 
@@ -221,7 +224,7 @@ rule all:
             release=RELEASES,
         ),
         expand(rules.calculate_release_ng50.output, release=RELEASES),
-        rules.plot_qv_comparison.output,
+        expand(rules.plot_qv_comparison.output, typ=["length", "qv"]),
         rules.plot_err_comparison.output,
         rules.smn_all.input,
         rules.censat_status_all.input,

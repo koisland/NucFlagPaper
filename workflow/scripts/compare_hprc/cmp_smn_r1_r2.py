@@ -84,7 +84,9 @@ SMALL_ERRORS = (
     "low_quality",
     "het_or_mismap",
 )
+STRUCTURAL_ERRORS = {"insertion", "deletion", "other_repeat", *LARGE_ERRORS}
 RELEASE_COLORS = {"Release 1": "red", "Release 2": "blue"}
+NON_ERROR_CALLS = {"correct", "het_or_mismap"}
 
 
 def item_rgb_to_hex(color: str) -> str:
@@ -136,6 +138,10 @@ def make_reorient_relative_df(df: pl.DataFrame) -> pl.DataFrame:
             end=(pl.col("qend") - pl.col("qst").min().over("qchrom")) + pl.col("rst"),
             mtch=pl.col("qchrom").str.extract_groups(r"^(?<sm>.*?)#(?<hap>1|2)#"),
         )
+        .with_columns(
+            pl.col("st") - pl.col("st").min(),
+            pl.col("end") - pl.col("st").min(),
+        )
         .unnest("mtch")
         .sort(["rchrom", "hap", "st"])
     )
@@ -156,20 +162,48 @@ def draw_r1_r2_smn(
     df_all: pl.DataFrame,
     nucflag_colors: dict[str, str],
     output_prefix: str,
-    figsize: tuple[int, int] = (12, 24),
+    figsize: tuple[int, int] = (16, 24),
 ):
     sm_haps = sorted(set(df_all.select("sm", "hap").iter_rows()))
+    nrows = (len(sm_haps) * 2) + 1
+    ht_ratios = [0.25, 1.0] * len(sm_haps)
+    ht_ratios.append(0.25)
     fig, axes = plt.subplots(
-        nrows=len(sm_haps) * 2,
+        nrows=nrows,
         ncols=2,
         layout="constrained",
         sharex=True,
-        height_ratios=[0.25, 1.0] * len(sm_haps),
+        height_ratios=ht_ratios,
         figsize=figsize,
     )
+    fig.supylabel("SMN1/2 locus", fontsize=18)
+
+    for col in (0, 1):
+        ax_bottom: Axes = axes[-1, col]
+        for spine in ["top", "left", "right"]:
+            ax_bottom.spines[spine].set_visible(False)
+        ax_bottom.tick_params(
+            axis="both",
+            left=False,
+            top=False,
+            right=False,
+            labelleft=False,
+            labeltop=False,
+            labelright=False,
+        )
+        ax_bottom.xaxis.set_major_formatter(lambda x, pos: f"{x / 1_000_000:.1f}")
+        ax_bottom.set_xlabel("Relative position (Mbp)")
+
     breaks_counter = defaultdict(Counter)
-    breaks_color = {True: "#ff6500", False: "#000000"}
+    breaks_color = {True: "#000000", False: "#72bcd4"}
     breaks_labels = {True: "Break", False: "Complete"}
+    # Mark if has error.
+    df_all = df_all.with_columns(
+        has_error=pl.col("name")
+        .is_in(STRUCTURAL_ERRORS)
+        .any()
+        .over(["sm", "hap", "release"])
+    )
     for row_offset, annot in enumerate(("nucflag", "dupmasker")):
         df_annot = df_all.filter(pl.col("dtype").eq(pl.lit(annot)))
         for row, (sm, hap) in enumerate(sm_haps):
@@ -211,13 +245,22 @@ def draw_r1_r2_smn(
                         poly = Polygon(xy=vertices, color=hexcolor)
                         polygons.append(poly)
                     else:
-                        ax.axvspan(itv["st"], itv["end"], color=hexcolor)
+                        if itv["name"] in NON_ERROR_CALLS:
+                            continue
+                        # color = hexcolor if itv["name"] in STRUCTURAL_ERRORS else "#000000"
+                        color = "#000000"
+                        ax.axvspan(itv["st"], itv["end"], color=color)
 
                 if annot == "dupmasker":
+                    # # Also draw boundary rect
+                    # # NOTE: This is not good for visualization because it obfuscates misaligned regions and gaps.
+                    # min_st, max_end = df_sm_hap_annot["st"].min(), df_sm_hap_annot["end"].max()
+                    # ax.axvspan(min_st, max_end, color="#808080", alpha=0.5)
                     ax.add_collection(PatchCollection(polygons, match_original=True))
 
-                if row_offset == 1:
-                    has_break = False
+                # Is dupmasker
+                if annot == "dupmasker":
+                    has_break_or_error = df_sm_hap_annot["has_error"].first() is True
                     for _, df_grp in df_sm_hap_annot.group_by(["qchrom"]):
                         # Is a break since if close to end of contig. Draw dashed line.
                         st_len_diff = abs(
@@ -242,10 +285,10 @@ def draw_r1_r2_smn(
                             color="black",
                             zorder=2,
                         )
-                        has_break = True
+                        has_break_or_error = True
 
-                    breaks_counter[release][has_break] += 1
-                    color = breaks_color[has_break]
+                    breaks_counter[release][has_break_or_error] += 1
+                    color = breaks_color[has_break_or_error]
                     ax.set_ylabel(
                         f"{sm}_hap{hap}",
                         color=color,
@@ -282,6 +325,33 @@ def draw_r1_r2_smn(
             path_effects=[pe.withStroke(linewidth=2.0, foreground="white")],
         )
     ax_nucflag.tick_params(axis="both", which="major", labelsize=14)
+    # Draw median
+    df_median_count = df_nucflag.group_by(["release"]).agg(pl.col("count").median())
+    release_to_median = {
+        release: median for release, median in df_median_count.iter_rows()
+    }
+    ax_nucflag_yticks, ax_nucflag_yticklabels = (
+        list(ax_nucflag.get_yticks()),
+        ax_nucflag.get_yticklabels(),
+    )
+
+    # Map median to release
+    median_to_release = {}
+    for release, median in release_to_median.items():
+        ax_nucflag.axhline(y=median, color=RELEASE_COLORS[release], linestyle="dotted")
+        ax_nucflag_yticks.append(median)
+        ax_nucflag_yticklabels.append(f"{median:.0f}")
+        median_to_release[f"{median:.0f}"] = release
+    ax_nucflag.set_yticks(ax_nucflag_yticks, ax_nucflag_yticklabels)
+
+    # Then color them
+    for lbl in ax_nucflag.get_yticklabels():
+        release = median_to_release.get(f"{float(lbl.get_text()):.0f}")
+        if not release:
+            continue
+        color = RELEASE_COLORS[release]
+        lbl.set_color(color)
+        lbl.set_path_effects([pe.withStroke(linewidth=1, foreground="white")])
 
     ax_nucflag.set_xlabel(None)
     ax_nucflag.set_ylabel("# of calls", fontsize=14)
@@ -302,37 +372,65 @@ def draw_r1_r2_smn(
     fig_nucflag.savefig(f"{output_prefix}_errors.pdf", bbox_inches="tight", dpi=300)
     fig_nucflag.savefig(f"{output_prefix}_errors.png", bbox_inches="tight", dpi=300)
 
-    # https://stackoverflow.com/a/73617021
-    def fmt_pct(pct: float, values: list[float]):
-        total = sum(values)
-        val = int(round(pct * total / 100.0))
-        return f"{pct:.1f}%\n({val})"
-
-    # Draw pie chart of number with breaks
-    fig_pie, axes_pie = plt.subplots(layout="constrained", ncols=1, nrows=2)
-    for i, ax_pie in enumerate(axes_pie):
+    # Draw hbar of number with breaks
+    fig_breaks, axes_breaks = plt.subplots(
+        layout="constrained", ncols=2, nrows=1, figsize=(figsize[0], 0.75), sharex=True
+    )
+    for i, ax_breaks in enumerate(axes_breaks):
+        ax_breaks: Axes
         release = f"Release {i + 1}"
-        ax_pie: Axes = axes_pie[i]
-        ax_pie.set_title(release, color=RELEASE_COLORS[release])
-        ax_pie.pie(
-            x=list(breaks_counter[release].values()),
-            labels=[breaks_labels[k] for k in breaks_counter[release].keys()],
-            colors=[breaks_color[k] for k in breaks_counter[release].keys()],
-            autopct=lambda pct: fmt_pct(pct, breaks_counter[release].values()),
-            textprops={
-                "path_effects": [pe.withStroke(linewidth=2.0, foreground="white")]
-            },
+        sns.barplot(
+            x=[sum(breaks_counter[release].values())],
+            y=[release],
+            color=breaks_color[False],
+            ax=ax_breaks,
+            label=breaks_labels[False],
+            legend=None,
         )
-    fig_pie.savefig(f"{output_prefix}_breaks.pdf", bbox_inches="tight", dpi=300)
-    fig_pie.savefig(f"{output_prefix}_breaks.png", bbox_inches="tight", dpi=300)
+        sns.barplot(
+            x=[breaks_counter[release][True]],
+            y=[release],
+            color=breaks_color[True],
+            ax=ax_breaks,
+            label=breaks_labels[True],
+            legend=None,
+        )
+        # NOTE: This will be centered so needs to be adjusted in post
+        for cont in ax_breaks.containers:
+            ax_breaks.bar_label(
+                cont,
+                label_type="center",
+                path_effects=[pe.withStroke(linewidth=2.0, foreground="white")],
+            )
 
+        ax_breaks.set_yticks([], [])
+        # for label in ax_breaks.get_yticklabels():
+        #     label.set_color(RELEASE_COLORS[release])
+
+        for spine in ("top", "left", "right"):
+            ax_breaks.spines[spine].set_visible(False)
+
+        ax.tick_params(
+            axis="both",
+            left=False,
+            top=False,
+            right=False,
+            labelleft=False,
+            labeltop=False,
+            labelright=False,
+        )
+
+    fig_breaks.savefig(f"{output_prefix}_breaks.pdf", bbox_inches="tight", dpi=300)
+    fig_breaks.savefig(f"{output_prefix}_breaks.png", bbox_inches="tight", dpi=300)
+
+    # NOTE: Needs to be manually moved to same x as ylbl
     ax_r1_top: Axes = axes[0, 0]
     ax_r1_top.set_title(
-        "Release 1", color=RELEASE_COLORS["Release 1"], pad=5, fontsize=18
+        "Release 1", color=RELEASE_COLORS["Release 1"], loc="left", fontsize=18
     )
     ax_r2_top: Axes = axes[0, 1]
     ax_r2_top.set_title(
-        "Release 2", color=RELEASE_COLORS["Release 2"], pad=5, fontsize=18
+        "Release 2", color=RELEASE_COLORS["Release 2"], loc="left", fontsize=18
     )
 
     fig.savefig(f"{output_prefix}.png", bbox_inches="tight", dpi=300)
@@ -485,7 +583,7 @@ def main():
         df_all=df_subset_all,
         nucflag_colors=nucflag_colors,
         output_prefix=f"{args.output_prefix}_subset{args.n_subset}",
-        figsize=(12, 8),
+        figsize=(16, 8),
     )
 
     fig_legend, axes_legend = plt.subplots(nrows=3, ncols=1, layout="tight")

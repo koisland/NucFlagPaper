@@ -93,8 +93,7 @@ def draw_grouped_bar_w_calls_by_asm(
             c,
             labels=labels,
             label_type="edge",
-            fontsize=12,
-            path_effects=[pe.withStroke(linewidth=0.5, foreground="white")],
+            fontsize=10,
         )
 
     ax_grouped_calls.set_xlabel(None)
