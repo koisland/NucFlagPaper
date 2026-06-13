@@ -116,13 +116,13 @@ def draw_combined_err_diff(
 
     if split_axes:
         name_fig, axes_fig = plt.subplots(
-            layout="constrained", figsize=(12, 10), nrows=2
+            layout="constrained", figsize=(12, 10), nrows=2, height_ratios=[0.5, 0.33]
         )
         name_fig.supylabel(ylabel, fontsize=18)
         # Add slashes and separate ylimits
         add_slashes(axes_fig[0], axes_fig[1])
         ylim_non_all = get_ylim_w_buffer(
-            df_filtered.filter(pl.col("name").ne(pl.lit("all"))), col
+            df_filtered.filter(pl.col("name").ne(pl.lit("all"))), col, buffer=0.25
         )
         min_val_all = (
             df_filtered.filter(pl.col("name").eq(pl.lit("all")))
@@ -130,10 +130,10 @@ def draw_combined_err_diff(
             .get_column(col)
             .first()
         )
-        ylim_all_buffer = (ylim_non_all[1] - ylim_non_all[0]) * 0.5
+        ylim_all_length = ylim_non_all[1] - ylim_non_all[0]
         ylim_all = (
-            min_val_all - ylim_all_buffer,
-            min_val_all + ylim_all_buffer,
+            min_val_all - ylim_all_length * 0.25,
+            min_val_all + ylim_all_length * 0.5,
         )
         set_ylim = {0: ylim_non_all, 1: ylim_all}
     else:
@@ -271,9 +271,9 @@ def main():
         .then(pl.lit("AFR"))
         .otherwise(pl.lit("Non-AFR"))
     )
-    afr_samples = set(
-        df_metadata.filter(pl.col("pop_group").eq(pl.lit("AFR")))["Sample ID"]
-    )
+    # afr_samples: set[Any] = set(
+    #     df_metadata.filter(pl.col("pop_group").eq(pl.lit("AFR")))["Sample ID"]
+    # )
 
     df_all = pl.concat((df_a, df_b))
     df_grp_no_hap = df_all.group_by(["sample", "label", "name"]).agg(
@@ -359,8 +359,8 @@ def main():
         lbl.set_rotation(45)
         lbl.set_horizontalalignment("right")
         lbl.set_rotation_mode("anchor")
-        color = POP_GROUP_COLORS["AFR" if lbl.get_text() in afr_samples else "Non-AFR"]
-        lbl.set_color(color)
+        # color = POP_GROUP_COLORS["AFR" if lbl.get_text() in afr_samples else "Non-AFR"]
+        # lbl.set_color(color)
 
     # Just eyeballing
     ax.yaxis.set_major_formatter(lambda x, _: f"{x / 1_000_000:.1f}")

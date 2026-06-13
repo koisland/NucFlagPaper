@@ -1,3 +1,4 @@
+import sys
 import argparse
 
 import polars as pl
@@ -195,7 +196,7 @@ def main():
     r1_vals, r2_vals = df_qvs.select("Group", col).partition_by("Group")
     res = ks_2samp(r1_vals[col], r2_vals[col], alternative="greater")
     draw_signif_brackets(ax, x1=0, x2=1, level=1.0, ylim=ax.get_ylim(), p=res.pvalue)
-
+    print(f"R2 has greater {args.type} than R1 ({res.pvalue})", file=sys.stderr)
     sns.stripplot(
         data=df_qvs,
         x="Group",
