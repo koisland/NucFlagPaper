@@ -9,6 +9,7 @@ from typing import Literal
 from matplotlib.patches import Patch
 from matplotlib.colors import rgb2hex
 from matplotlib.axes import Axes
+from matplotlib import ticker
 
 COLS_CALLS = (
     "chrom",
@@ -95,6 +96,7 @@ def draw_combined_err_diff(
     name_colors: dict[str, str],
     include_all: bool = False,
     by: Literal["count", "length"] = "count",
+    figsize: tuple[int, int] = (12, 8),
 ):
     if by == "count":
         col = "diff_count"
@@ -116,7 +118,7 @@ def draw_combined_err_diff(
 
     if split_axes:
         name_fig, axes_fig = plt.subplots(
-            layout="constrained", figsize=(12, 10), nrows=2, height_ratios=[0.5, 0.33]
+            layout="constrained", figsize=figsize, nrows=2, height_ratios=[0.5, 0.33]
         )
         name_fig.supylabel(ylabel, fontsize=18)
         # Add slashes and separate ylimits
@@ -136,8 +138,12 @@ def draw_combined_err_diff(
             min_val_all + ylim_all_length * 0.5,
         )
         set_ylim = {0: ylim_non_all, 1: ylim_all}
+        # Uniform tick multiples
+        ax: Axes
+        for ax in axes_fig:
+            ax.yaxis.set_major_locator(ticker.MultipleLocator(50_000))
     else:
-        name_fig, ax_fig = plt.subplots(layout="constrained", figsize=(12, 10))
+        name_fig, ax_fig = plt.subplots(layout="constrained", figsize=figsize)
         axes_fig = [ax_fig]
         set_ylim = None
 

@@ -251,6 +251,7 @@ def main():
     df_qvs_summary.write_csv(
         f"{args.output_prefix}_summary.tsv", separator="\t", include_header=True
     )
+    g.savefig(f"{args.output_prefix}.pdf", bbox_inches="tight", dpi=600)
     g.savefig(f"{args.output_prefix}.png", bbox_inches="tight", dpi=600)
 
 

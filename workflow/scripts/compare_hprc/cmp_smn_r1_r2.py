@@ -403,12 +403,13 @@ def draw_r1_r2_smn(
                 path_effects=[pe.withStroke(linewidth=2.0, foreground="white")],
             )
 
-        ax_breaks.set_yticks([], [])
-        # for label in ax_breaks.get_yticklabels():
-        #     label.set_color(RELEASE_COLORS[release])
+        for label in ax_breaks.get_yticklabels():
+            label.set_color(RELEASE_COLORS[release])
 
         for spine in ("top", "left", "right"):
             ax_breaks.spines[spine].set_visible(False)
+
+        ax_breaks.set_xlabel("# complete and structurally error-free")
 
         ax.tick_params(
             axis="both",
