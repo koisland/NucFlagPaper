@@ -171,6 +171,8 @@ rule plot_r1_r2_chm13_coords:
     params:
         script="workflow/scripts/compare_hprc/cmp_smn_r1_r2.py",
         output_prefix=lambda wc, output: splitext(output[0])[0],
+    conda:
+        "../../envs/tools.yaml"
     shell:
         """
         python {params.script} \

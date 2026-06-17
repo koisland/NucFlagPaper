@@ -6,6 +6,7 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 import matplotlib.patheffects as pe
 
+from dataclasses import dataclass
 from collections import Counter, defaultdict
 from matplotlib.axes import Axes
 from matplotlib.patches import Patch
@@ -13,6 +14,7 @@ from matplotlib.colors import to_hex
 from matplotlib.lines import Line2D
 from matplotlib.collections import PatchCollection
 from matplotlib.patches import Polygon
+from intervaltree import Interval, IntervalTree
 
 plt.rcParams["font.family"] = "Arial"
 
@@ -87,6 +89,12 @@ SMALL_ERRORS = (
 STRUCTURAL_ERRORS = {"insertion", "deletion", "other_repeat", *LARGE_ERRORS}
 RELEASE_COLORS = {"Release 1": "red", "Release 2": "blue"}
 NON_ERROR_CALLS = {"correct", "het_or_mismap"}
+
+
+@dataclass
+class OverlapCounts:
+    errors: int = 0
+    breaks: int = 0
 
 
 def item_rgb_to_hex(color: str) -> str:
@@ -176,7 +184,6 @@ def draw_r1_r2_smn(
         height_ratios=ht_ratios,
         figsize=figsize,
     )
-    fig.supylabel("SMN1/2 locus", fontsize=18)
 
     for col in (0, 1):
         ax_bottom: Axes = axes[-1, col]
@@ -204,17 +211,27 @@ def draw_r1_r2_smn(
         .any()
         .over(["sm", "hap", "release"])
     )
+    err_norm_itree: defaultdict[str, IntervalTree] = defaultdict(IntervalTree)
+    break_norm_itree: defaultdict[str, IntervalTree] = defaultdict(IntervalTree)
+    median_length_release: dict[str, float] = dict(
+        df_all.filter(pl.col("dtype").eq(pl.lit("dupmasker")))
+        .group_by(["release"])
+        .agg((pl.col("end").max() - pl.col("st").min()).median())
+        .iter_rows()
+    )
     for row_offset, annot in enumerate(("nucflag", "dupmasker")):
         df_annot = df_all.filter(pl.col("dtype").eq(pl.lit(annot)))
         for row, (sm, hap) in enumerate(sm_haps):
             row = (row * 2) + row_offset
 
             for col, release in enumerate(("Release 1", "Release 2")):
+                median_length = median_length_release[release]
                 df_sm_hap_annot = df_annot.filter(
                     pl.col("sm").eq(pl.lit(sm))
                     & pl.col("hap").eq(pl.lit(hap))
                     & pl.col("release").eq(pl.lit(release))
                 )
+                # max_end_position = df_sm_hap_annot["end"].max()
                 ax: Axes = axes[row, col]
                 ax.set_ylim(0, 1)
                 print(row, col, file=sys.stderr)
@@ -247,6 +264,8 @@ def draw_r1_r2_smn(
                     else:
                         if itv["name"] in NON_ERROR_CALLS:
                             continue
+                        err_norm_itree[release].add(Interval(itv["st"], itv["end"]))
+
                         # color = hexcolor if itv["name"] in STRUCTURAL_ERRORS else "#000000"
                         color = "#000000"
                         ax.axvspan(itv["st"], itv["end"], color=color)
@@ -258,24 +277,21 @@ def draw_r1_r2_smn(
                     # ax.axvspan(min_st, max_end, color="#808080", alpha=0.5)
                     ax.add_collection(PatchCollection(polygons, match_original=True))
 
-                # Is dupmasker
-                if annot == "dupmasker":
                     has_break_or_error = df_sm_hap_annot["has_error"].first() is True
                     for _, df_grp in df_sm_hap_annot.group_by(["qchrom"]):
                         # Is a break since if close to end of contig. Draw dashed line.
-                        st_len_diff = abs(
-                            df_grp["qst"].min() - df_grp["length"].first()
-                        )
                         end_len_diff = abs(
                             df_grp["qend"].max() - df_grp["length"].first()
                         )
-                        if st_len_diff < 50000:
+                        if df_grp["qst"].min() < 50000:
                             x_line = df_grp["st"].min()
                         elif end_len_diff < 50000:
                             x_line = df_grp["end"].max()
                         else:
                             continue
-                        # print(row, col, "break")
+                        print(row, col, "break")
+                        # norm_xst = (x_line / max_end_position) * median_length
+                        break_norm_itree[release].add(Interval(x_line, x_line + 1))
                         ax.axvline(
                             x=x_line,
                             ymin=0,
@@ -297,6 +313,66 @@ def draw_r1_r2_smn(
                         va="center",
                         fontsize=12,
                     )
+
+    # Draw relative position of breaks
+    fig_cov, axes_cov = plt.subplots(
+        ncols=2,
+        nrows=1,
+        layout="constrained",
+        figsize=(figsize[0], 2),
+        sharex=True,
+        sharey=True,
+    )
+    window = 5000
+    for i, release in enumerate(("Release 1", "Release 2")):
+        ax: Axes = axes_cov[i]
+        breaks_itree = break_norm_itree[release]
+        errors_itree = err_norm_itree[release]
+        median_length = median_length_release[release]
+
+        num, rem = divmod(median_length, window)
+        num = int(num)
+        final_start = num * window
+        # All intervals of window size
+        itvs = [
+            Interval((i - 1) * window, i * window, OverlapCounts())
+            for i in range(1, num + 1)
+        ]
+        itvs.append(Interval(final_start, final_start + rem, OverlapCounts()))
+
+        for itv in itvs:
+            cnts: OverlapCounts = itv.data
+            for bitv in breaks_itree.overlap(itv):
+                cnts.breaks += 1
+
+            for eitv in errors_itree.overlap(itv):
+                cnts.errors += 1
+
+        for spine in ("top", "right"):
+            ax.spines[spine].set_visible(False)
+
+        ax.xaxis.set_major_formatter(lambda x, pos: f"{x / 1_000_000:.1f}")
+        ax.set_xlabel("Relative position (Mbp)")
+        ax.set_ylabel("Cumulative # of calls")
+        ax.set_title(release, color=RELEASE_COLORS[release])
+
+        # Then draw the bars
+        xpos, breaks, errors = [], [], []
+        for itv in itvs:
+            xpos.append(itv.begin)
+            errors.append(itv.data.errors)
+            breaks.append(itv.data.breaks)
+
+        ax.bar(x=xpos, height=errors, width=window, color="black", label="Errors")
+        ax.bar(x=xpos, height=breaks, width=window, color="orange", label="Breaks")
+        ax.legend(**LEGEND_KWARGS | {"loc": "upper right"})
+
+    fig_cov.savefig(
+        f"{output_prefix}_relpos_breaks_errors.png", bbox_inches="tight", dpi=300
+    )
+    fig_cov.savefig(
+        f"{output_prefix}_relpos_breaks_errors.pdf", bbox_inches="tight", dpi=300
+    )
 
     # Draw breakdown of errors in locus
     fig_nucflag, ax_nucflag = plt.subplots(layout="constrained", figsize=(12, 4))
@@ -427,11 +503,17 @@ def draw_r1_r2_smn(
     # NOTE: Needs to be manually moved to same x as ylbl
     ax_r1_top: Axes = axes[0, 0]
     ax_r1_top.set_title(
-        "Release 1", color=RELEASE_COLORS["Release 1"], loc="left", fontsize=18
+        "SMN1/2 locus (Release 1)",
+        color=RELEASE_COLORS["Release 1"],
+        loc="left",
+        fontsize=18,
     )
     ax_r2_top: Axes = axes[0, 1]
     ax_r2_top.set_title(
-        "Release 2", color=RELEASE_COLORS["Release 2"], loc="left", fontsize=18
+        "SMN1/2 locus (Release 2)",
+        color=RELEASE_COLORS["Release 2"],
+        loc="left",
+        fontsize=18,
     )
 
     fig.savefig(f"{output_prefix}.png", bbox_inches="tight", dpi=300)
