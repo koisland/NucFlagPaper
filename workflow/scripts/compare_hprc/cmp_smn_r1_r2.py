@@ -14,6 +14,7 @@ from matplotlib.colors import to_hex
 from matplotlib.lines import Line2D
 from matplotlib.collections import PatchCollection
 from matplotlib.patches import Polygon
+from matplotlib import ticker
 from intervaltree import Interval, IntervalTree
 
 plt.rcParams["font.family"] = "Arial"
@@ -326,6 +327,7 @@ def draw_r1_r2_smn(
     window = 5000
     for i, release in enumerate(("Release 1", "Release 2")):
         ax: Axes = axes_cov[i]
+        ax.margins(x=0)
         breaks_itree = break_norm_itree[release]
         errors_itree = err_norm_itree[release]
         median_length = median_length_release[release]
@@ -352,6 +354,7 @@ def draw_r1_r2_smn(
             ax.spines[spine].set_visible(False)
 
         ax.xaxis.set_major_formatter(lambda x, pos: f"{x / 1_000_000:.1f}")
+        ax.xaxis.set_major_locator(ticker.MultipleLocator(500_000))
         ax.set_xlabel("Relative position (Mbp)")
         ax.set_ylabel("Cumulative # of calls")
         ax.set_title(release, color=RELEASE_COLORS[release])

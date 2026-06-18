@@ -96,7 +96,7 @@ def draw_combined_err_diff(
     name_colors: dict[str, str],
     include_all: bool = False,
     by: Literal["count", "length"] = "count",
-    figsize: tuple[int, int] = (12, 8),
+    figsize: tuple[int, int] = (16, 8),
 ):
     if by == "count":
         col = "diff_count"
