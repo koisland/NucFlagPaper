@@ -1,6 +1,7 @@
 import sys
 import argparse
 
+import numpy as np
 import polars as pl
 import seaborn as sns
 import matplotlib.pyplot as plt
@@ -26,6 +27,28 @@ LEGEND_KWARGS = dict(
 )
 
 plt.rcParams["font.family"] = "Arial"
+
+
+def calc_stats(lengths, qs, x=50, gsize=None):
+    n = len(lengths)
+    if gsize is None:
+        total = sum(lengths)
+    else:
+        total = gsize
+    lens = sorted(lengths)[::-1]
+    mmax = lens[0]
+    mmin = lens[-1]
+    mean = total / n
+
+    auN = sum([x * x for x in lens]) / total
+    quantiles = np.quantile(lens, qs)
+
+    # N50 stats
+    count = 0
+    for ln in lens:
+        count += ln
+        if count >= total * (x / 100):
+            return (sum(lengths), n, mean, quantiles, mmin, mmax, ln, auN)
 
 
 def draw_signif_brackets(
@@ -137,34 +160,46 @@ def main():
         df_metadata, left_on="sample", right_on="Sample ID", how="left"
     )
     if args.type == "length":
-        col = "Length (Mbp)"
-        ylabel = "Contig length (Mbp)"
+        col = "NG50 (Mbp)"
+        ylabel = "NG50 (Mbp)"
+        # Minimum height to find peaks
+        min_height = 0
+        rows_grp = []
+        for grp, df_grp in df_qvs.with_columns(
+            length=pl.col("end") - pl.col("start")
+        ).group_by(["sample", "lbl"]):
+            sample, lbl = grp
+            total, nseqs, mean, quantiles, mmin, mmax, N50, auN = calc_stats(
+                df_grp["length"], [0.5], gsize=3098794149
+            )
+            rows_grp.append((sample, lbl, N50 / 1_000_000, auN / 1_000_000))
+        df_type = pl.DataFrame(
+            rows_grp, orient="row", schema=["sample", "lbl", "NG50 (Mbp)", "auN (Mbp)"]
+        )
     else:
         col = "qv"
         ylabel = "QV (NucFlag)"
-    df_qvs = (
-        df_qvs.with_columns(
+        min_height = 10
+        df_type = df_qvs.with_columns(
             # Set infinite values to median
             pl.when(pl.col("qv").is_infinite())
             .then(pl.col("qv").median().over(["sample", "hap", "lbl"]))
             .otherwise(pl.col("qv"))
             .alias("qv"),
-            pl.when(pl.col("Population Abbreviation").is_in(AFR_POP_LABELS))
-            .then(pl.lit("AFR"))
-            .otherwise(pl.lit("Non-AFR"))
-            .alias("Sample"),
-            ((pl.col("end") - pl.col("start")) / 1_000_000).alias("Length (Mbp)"),
+            # pl.when(pl.col("Population Abbreviation").is_in(AFR_POP_LABELS))
+            # .then(pl.lit("AFR"))
+            # .otherwise(pl.lit("Non-AFR"))
+            # .alias("Sample"),
         )
-        .with_columns(
-            group=pl.when(pl.col("lbl").eq("a")).then(pl.lit(0)).otherwise(pl.lit(1))
-        )
-        .with_columns(
-            Group=pl.col("group").cast(pl.String).replace(labels),
-        )
+
+    df_type = df_type.with_columns(
+        group=pl.when(pl.col("lbl").eq("a")).then(pl.lit(0)).otherwise(pl.lit(1))
+    ).with_columns(
+        Group=pl.col("group").cast(pl.String).replace(labels),
     )
 
     g = sns.catplot(
-        data=df_qvs,
+        data=df_type,
         x="Group",
         y=col,
         hue="Group",
@@ -193,12 +228,18 @@ def main():
         )
 
     # One-sided test two-sample KS test
-    r1_vals, r2_vals = df_qvs.select("Group", col).partition_by("Group")
+    r1_vals, r2_vals = (
+        df_type.sort(by="Group").select("Group", col).partition_by("Group")
+    )
     res = ks_2samp(r1_vals[col], r2_vals[col], alternative="greater")
-    draw_signif_brackets(ax, x1=0, x2=1, level=1.0, ylim=ax.get_ylim(), p=res.pvalue)
-    print(f"R2 has greater {args.type} than R1 ({res.pvalue})", file=sys.stderr)
+    if res.pvalue < 0.05:
+        draw_signif_brackets(
+            ax, x1=0, x2=1, level=1.0, ylim=ax.get_ylim(), p=res.pvalue
+        )
+        print(f"R2 has greater {args.type} than R1 ({res.pvalue})", file=sys.stderr)
+
     sns.stripplot(
-        data=df_qvs,
+        data=df_type,
         x="Group",
         y=col,
         hue="Group",
@@ -217,12 +258,12 @@ def main():
     for spine in ("top", "right"):
         ax.spines[spine].set_visible(False)
 
-    df_qvs = df_qvs.with_columns(Group=pl.col("Group").str.replace("\n", " "))
+    df_type = df_type.with_columns(Group=pl.col("Group").str.replace("\n", " "))
 
     peak_rows = []
-    for grp, df_grp in df_qvs.group_by(["Group"]):
+    for grp, df_grp in df_type.group_by(["Group"]):
         counts = df_grp[col].round().value_counts().sort(by=col)
-        peaks, props = find_peaks(counts["count"], height=10)
+        peaks, props = find_peaks(counts["count"], height=min_height)
         for pk, ht in zip(peaks, props["peak_heights"]):
             peak_rows.append((pk, ht, grp[0]))
 
@@ -239,7 +280,7 @@ def main():
     # sns.move_legend(
     #     ax, loc="center", fontsize=18, bbox_to_anchor=(1.125, 0.5), title=None, **LEGEND_KWARGS
     # )
-    df_qvs_summary = df_qvs.group_by(["Group"]).agg(
+    df_type_summary = df_type.group_by(["Group"]).agg(
         perc_25=pl.col(col).quantile(0.25),
         median=pl.col(col).median(),
         mean=pl.col(col).mean(),
@@ -247,8 +288,8 @@ def main():
         perc_75=pl.col(col).quantile(0.75),
     )
 
-    df_qvs.write_csv(f"{args.output_prefix}.tsv", separator="\t", include_header=True)
-    df_qvs_summary.write_csv(
+    df_type.write_csv(f"{args.output_prefix}.tsv", separator="\t", include_header=True)
+    df_type_summary.write_csv(
         f"{args.output_prefix}_summary.tsv", separator="\t", include_header=True
     )
     g.savefig(f"{args.output_prefix}.pdf", bbox_inches="tight", dpi=600)

@@ -378,7 +378,7 @@ def draw_r1_r2_smn(
     )
 
     # Draw breakdown of errors in locus
-    fig_nucflag, ax_nucflag = plt.subplots(layout="constrained", figsize=(12, 4))
+    fig_nucflag, ax_nucflag = plt.subplots(layout="constrained", figsize=(10, 3))
     ax_nucflag: Axes
     df_nucflag = (
         df_all.filter(pl.col("dtype").eq(pl.lit("nucflag")))
@@ -399,11 +399,10 @@ def draw_r1_r2_smn(
     for cont in ax_nucflag.containers:
         ax_nucflag.bar_label(
             cont,
-            fontsize=12,
+            fontsize=10,
             label_type="edge",
-            path_effects=[pe.withStroke(linewidth=2.0, foreground="white")],
         )
-    ax_nucflag.tick_params(axis="both", which="major", labelsize=14)
+    ax_nucflag.tick_params(axis="both", which="major", labelsize=12)
     # Draw median
     df_median_count = df_nucflag.group_by(["release"]).agg(pl.col("count").median())
     release_to_median = {
@@ -430,7 +429,7 @@ def draw_r1_r2_smn(
             continue
         color = RELEASE_COLORS[release]
         lbl.set_color(color)
-        lbl.set_path_effects([pe.withStroke(linewidth=1, foreground="white")])
+        # lbl.set_path_effects([pe.withStroke(linewidth=1, foreground="white")])
 
     ax_nucflag.set_xlabel(None)
     ax_nucflag.set_ylabel("# of calls", fontsize=14)
@@ -439,13 +438,13 @@ def draw_r1_r2_smn(
         lbl.set_color(nucflag_colors[lbl.get_text()])
         lbl.set_horizontalalignment("right")
         lbl.set_rotation_mode("anchor")
-        lbl.set_path_effects([pe.withStroke(linewidth=0.5, foreground="black")])
+        # lbl.set_path_effects([pe.withStroke(linewidth=0.5, foreground="black")])
 
     for spine in ("top", "right"):
         ax_nucflag.spines[spine].set_visible(False)
 
     sns.move_legend(
-        ax_nucflag, fontsize=14, title=None, **LEGEND_KWARGS | {"loc": "upper left"}
+        ax_nucflag, fontsize=12, title=None, **LEGEND_KWARGS | {"loc": "upper left"}
     )
 
     fig_nucflag.savefig(f"{output_prefix}_errors.pdf", bbox_inches="tight", dpi=300)

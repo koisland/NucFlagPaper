@@ -170,7 +170,6 @@ def draw_combined_err_diff(
                 cont,
                 fontsize=12,
                 label_type="edge",
-                path_effects=[pe.withStroke(linewidth=2.0, foreground="white")],
                 padding=3,
                 **kwargs,
             )
@@ -194,9 +193,9 @@ def draw_combined_err_diff(
         if i == len(axes_fig) - 1:
             for label in ax_fig.get_xticklabels():
                 label.set_color(name_colors.get(label.get_text(), "gray"))
-                label.set_path_effects(
-                    [pe.withStroke(linewidth=0.2, foreground="black")]
-                )
+                # label.set_path_effects(
+                #     [pe.withStroke(linewidth=0.2, foreground="black")]
+                # )
                 label.set_rotation(45)
                 label.set_horizontalalignment("right")
                 label.set_rotation_mode("anchor")
