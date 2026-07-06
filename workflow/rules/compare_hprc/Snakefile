@@ -1,4 +1,3 @@
-import polars as pl
 from os.path import join, splitext
 from collections import defaultdict
 from typing import Iterator
@@ -211,7 +210,7 @@ rule plot_err_comparison:
 
 
 include: "smn.smk"
-include: "censat.smk"
+# include: "censat.smk"
 
 
 rule all:
@@ -227,5 +226,5 @@ rule all:
         expand(rules.plot_qv_comparison.output, typ=["length", "qv"]),
         rules.plot_err_comparison.output,
         rules.smn_all.input,
-        rules.censat_status_all.input,
+        # rules.censat_status_all.input,
     default_target: True

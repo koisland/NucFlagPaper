@@ -1,7 +1,7 @@
 # NucFlag Paper
 [![CI](https://github.com/koisland/NucFlagPaper/actions/workflows/ci.yaml/badge.svg)](https://github.com/koisland/NucFlagPaper/actions/workflows/ci.yaml)
 
-Code for NucFlag paper and benchmarking.
+Code for NucFlag paper and assembly and validation tool benchmarking.
 
 ## Getting started
 Clone repo and its submodules.
@@ -9,8 +9,9 @@ Clone repo and its submodules.
 git clone https://github.com/koisland/NucFlagPaper.git --recursive
 ```
 
-Create conda environment.
+Create `conda` environment. Also requires `apptainer`.
 ```bash
+# module load apptainer
 conda create --name NucFlagPaper bioconda::snakemake==9.5.0
 ```
 
@@ -19,8 +20,7 @@ conda create --name NucFlagPaper bioconda::snakemake==9.5.0
 ### Paper
 To run the analyses in the paper.
 ```bash
-which apptainer
-# Replace profiles/default/ with preferred execution method and rop -e.
+# Replace profiles/default/ with preferred execution method and drop -e.
 snakemake -np --configfile config/config.yaml -e local
 ```
 
@@ -165,17 +165,13 @@ hprc_calculate_qv                                            80
 hprc_calculate_release_ng50                                   2
 hprc_download_aligned_bams                                   80
 hprc_download_assemblies                                     80
-hprc_download_r2_cens                                        40
-hprc_generate_cens_bed                                       40
 hprc_intersect_dupmasker_nucflag                             80
 hprc_merge_intervals_preserve_ort                            80
-hprc_merge_statuses_and_label                                 2
 hprc_plot_err_comparison                                      1
 hprc_plot_qv_comparison                                       2
 hprc_plot_r1_r2_chm13_coords                                  1
 hprc_query_w_impg_sm_to_chm13_paf                            80
 hprc_run_nucflag                                             80
-hprc_status_count_by_region                                  80
 hprc_subset_smn                                              80
 make_annot_json                                             132
 merge_calls                                                 132
@@ -211,7 +207,7 @@ sim_ms_split_asm_misasim                                      2
 sim_plot_precision_recall                                     2
 sim_plot_precision_recall_xy                                  2
 sim_plot_stats_f1_all                                         2
-total                                                      5731
+total                                                      5569
 ```
 </details>
 

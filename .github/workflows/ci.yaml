@@ -15,4 +15,5 @@ jobs:
         directory: .
         snakefile: workflow/Snakefile
         snakemake-version: 9.5.0
+        install-apptainer: true
         args: "--configfile config/config.yaml -c 1 -np -e local"
