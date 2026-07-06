@@ -9,6 +9,7 @@ with open(config["assembly_config"]["manifest"], "rb") as fh:
         data["ont"]["path"] = [data.path for data in DATA["CHM13"].ont.values()]
         data["hifi"]["path"] = [data.path for data in DATA["CHM13"].hifi.values()]
 
+
 module CompareAssembly:
     snakefile:
         "compare_assembly/Snakefile"

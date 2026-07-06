@@ -44,9 +44,7 @@ rule convert_annotations_to_bed:
 
 
 saffire_cfg = {
-    "ref": {
-        "CHM13v2.0": ASM_CHM13
-    },
+    "ref": {"CHM13v2.0": ASM_CHM13},
     "sm": {
         "HG002v1.0.1": expand(rules.download_curated_asm.output.fa, version="v1.0.1")
     },

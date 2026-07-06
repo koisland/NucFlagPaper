@@ -1,4 +1,3 @@
-
 def get_sample_misassembly_samples(
     data: defaultdict[str, "DataSourceInfo"]
 ) -> dict[str, dict[str, str | list[str]]]:
@@ -48,12 +47,14 @@ NUM = 100
 LEN = config.get("lengths", [1, 2, 10, 100, 1_000, 10_000, 50_000])
 MTYPES = config.get("mtype", ["misjoin", "false_duplication", "inversion"])
 DOWNSAMPLE_PERC = [0.50, 0.33]
-ALL_MTYPES_SEEDED = get_mtypes_w_seeds(NUM, LEN, MTYPES)     
+ALL_MTYPES_SEEDED = get_mtypes_w_seeds(NUM, LEN, MTYPES)
+
 
 wildcard_constraints:
     sm="|".join(SAMPLES),
     dtype="|".join(DTYPES),
     url_hash="|".join(URL_HASHES),
+
 
 """
 {
@@ -71,6 +72,7 @@ wildcard_constraints:
 }
 """
 
+
 module Misassemblies:
     snakefile:
         "misasim/Snakefile"
@@ -79,11 +81,12 @@ module Misassemblies:
             "output_dir": join(config["output_dir"], "misasim"),
             "logs_dir": join(config["logs_dir"], "misasim"),
             "benchmarks_dir": join(config["benchmarks_dir"], "misasim"),
-            "samples": get_sample_misassembly_samples(DATA, ),
+            "samples": get_sample_misassembly_samples(
+                DATA,
+            ),
             "downsample_perc": DOWNSAMPLE_PERC,
             "seeded_mtypes": ALL_MTYPES_SEEDED,
         }
 
 
 use rule * from Misassemblies as sim_*
-

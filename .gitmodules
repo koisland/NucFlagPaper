@@ -35,3 +35,4 @@
 	path = workflow/rules/compare_hprc/Rhodonite
 	url = git@github.com:koisland/Rhodonite.git
 	branch = feature/pass-smk-outputs
+	ignore = "dirty"

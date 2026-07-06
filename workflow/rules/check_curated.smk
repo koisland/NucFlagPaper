@@ -12,7 +12,7 @@ module HG002_curated:
             "alpha": config["config"]["flagger_hifi"],
             # Can be multiple so just take first
             "asm_chm13": DATA["CHM13"].get_first("assembly").path,
-            "cytobands_chm13": DATA["CHM13"].get_first("cytobands").path
+            "cytobands_chm13": DATA["CHM13"].get_first("cytobands").path,
         }
 
 

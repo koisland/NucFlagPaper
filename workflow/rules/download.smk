@@ -17,11 +17,13 @@ class DataSourceInfo:
     def get_first(self, dtype: str) -> DataUrlInfo:
         return next(iter(getattr(self, dtype).values()))
 
+
 class DataInfo(NamedTuple):
     samples: list[str]
     dtypes: list[str]
     hashes: list[str]
     data: DataSourceInfo
+
 
 ALLOWED_DTYPES = {"assembly", "hifi", "ont", "rm", "vcf", "cytobands"}
 DATA_MANIFEST = config["simulate"]["manifest"]
@@ -49,7 +51,7 @@ def get_data_manifest(data_manifest: str, output_dir: str) -> DataInfo:
                 data_url_info[url_hash] = DataUrlInfo(
                     url=url,
                     path=join(output_dir, sm, dtype, base_fname),
-                    cmd=cmd if cmd else None
+                    cmd=cmd if cmd else None,
                 )
             else:
                 raise ValueError(f"Invalid dtype ({dtype})")
@@ -60,6 +62,7 @@ def get_data_manifest(data_manifest: str, output_dir: str) -> DataInfo:
 
     return DataInfo(samples, dtypes, url_hashes, data)
 
+
 # Get data
 DATA_INFO = get_data_manifest(DATA_MANIFEST, DATA_DIR)
 SAMPLES, DTYPES, URL_HASHES, DATA = DATA_INFO
@@ -68,9 +71,9 @@ SAMPLES, DTYPES, URL_HASHES, DATA = DATA_INFO
 EXPECTED_FILES = []
 for sm, dtype, hsh in zip(SAMPLES, DTYPES, URL_HASHES, strict=True):
     path = getattr(DATA[sm], dtype)[hsh].path
-    EXPECTED_FILES.append(path)        
+    EXPECTED_FILES.append(path)
     if dtype == "assembly":
-        EXPECTED_FILES.append(f"{path}.fai")   
+        EXPECTED_FILES.append(f"{path}.fai")
 
 
 rule download_files:
@@ -116,7 +119,7 @@ rule download_all:
             sm=SAMPLES,
             dtype=DTYPES,
             url_hash=URL_HASHES,
-        )
+        ),
     output:
         # Files that should exist at this point.
-        EXPECTED_FILES
+        EXPECTED_FILES,

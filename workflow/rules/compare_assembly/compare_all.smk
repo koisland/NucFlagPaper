@@ -6,7 +6,7 @@ ANNOT_TITLE = {"censat": "Centromere satellites", "segdups": "Segmental duplicat
 
 
 wildcard_constraints:
-    annot="|".join(ANNOT_COLORS.keys())
+    annot="|".join(ANNOT_COLORS.keys()),
 
 
 rule plot_compare_misassemblies:
