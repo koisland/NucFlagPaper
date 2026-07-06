@@ -25,6 +25,7 @@ snakemake -np --configfile config/config.yaml -e local
 
 <details>
 <summary>Jobs run</summary>
+
 ```
 Job stats:
 job                                                       count
