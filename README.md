@@ -1,4 +1,6 @@
 # NucFlag Paper
+[![CI](https://github.com/koisland/NucFlagPaper/actions/workflows/ci.yaml/badge.svg)](https://github.com/koisland/NucFlagPaper/actions/workflows/ci.yaml)
+
 Code for NucFlag paper and benchmarking.
 
 ## Getting started
@@ -13,7 +15,9 @@ conda create --name NucFlagPaper bioconda::snakemake==9.5.0
 ```
 
 ## Usage
-To run all analyses for paper:
+
+### Paper
+To run the analyses in the paper.
 ```bash
 which apptainer
 # Replace profiles/default/ with preferred execution method and rop -e.
@@ -211,18 +215,20 @@ total                                                      5731
 ```
 </details>
 
-To run just assembly error simulation.
+### Simulate and calculate F1-scores for assembly validation tools 
+To run just assembly error simulation for `HMM-Flagger`, `Inspector`, and `NucFlag`.
 ```bash
 TODO
 ```
 
-To run assembly benchmarking for hifiasm and verkko with different versions.
+### Assembly benchmarking
+To run assembly benchmarking using `NucFlag` for `hifiasm` and `verkko` with different versions.
 ```bash
 TODO
 ```
 
 ## Organization
-This repository contains all code used in the NucFlag paper. Its organized as a standard Snakemake workflow.
+This repository contains all code used in the `NucFlag` paper. Its organized as a standard `Snakemake` workflow.
 ```
 workflow/
 ├── envs

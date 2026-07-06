@@ -15,4 +15,4 @@ jobs:
         directory: .
         snakefile: workflow/Snakefile
         snakemake-version: 9.5.0
-        args: "--configfile test/config.yaml -c 1 -np -e local"
+        args: "--configfile config/config.yaml -c 1 -np -e local"
