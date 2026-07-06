@@ -144,7 +144,6 @@ def nf_output(wc) -> str:
 
 rule calculate_precision_recall:
     input:
-        mtype_dir=lambda wc: dirname(MISASIM_OUTPUT.bed).format(sm=wc.sm),
         chkpt=lambda wc: [
             *expand(MISASIM_OUTPUT, sm=SAMPLES.keys(), seed=ALL_MTYPES_SEEDED.keys()),
             *nf_output(wc),
@@ -160,6 +159,7 @@ rule calculate_precision_recall:
         fglob_truth="*.bed",
         dtype=get_dtype,
         output_dir=OUTPUT_DIR,
+        mtype_dir=lambda wc: dirname(MISASIM_OUTPUT.bed).format(sm=wc.sm),
     conda:
         "../../envs/tools.yaml"
     shell:
@@ -167,7 +167,7 @@ rule calculate_precision_recall:
         python {params.script} \
         -a {params.output_dir} \
         --glob_test "{params.fglob_test}" \
-        -b {input.mtype_dir} \
+        -b {params.mtype_dir} \
         --glob_truth "{params.fglob_truth}" \
         -d {params.dtype} \
         --output_dir_missed_calls {output.missed_calls_dir} > {output.summary}

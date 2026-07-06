@@ -12,7 +12,7 @@ DATA = defaultdict(lambda: defaultdict(dict))
 RELEASES = ["R1", "R2"]
 SM_METADATA = join("data", "compare_hprc", "hprc_metadata.tsv")
 # From other part of workflow
-ASM_CHM13 = join(OUTPUT_DIR, "..", "assembly", "reference", "chm13v2.0.fa.gz")
+ASM_CHM13 = config["asm_chm13"]
 BED_CHM13_SMN = join("data", "compare_hprc", "chm13v2.0_smn_1mbp_slop.bed")
 
 with open(config["manifest"]) as fh:

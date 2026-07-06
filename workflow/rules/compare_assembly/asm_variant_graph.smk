@@ -145,7 +145,7 @@ rule intersect_bubbles_w_calls:
 rule query_chm13_impg:
     input:
         paf=rules.vg_ava_asm.output,
-        fai=rules.download_chm13.output.fai,
+        fa=ASM_CHM13,
     output:
         bed=join(OUTPUT_DIR, "vg", "ava_asm_liftover_chm13.bed.gz"),
     params:
@@ -157,11 +157,12 @@ rule query_chm13_impg:
         "Snakemake-asm-evaluation-vg/workflow/envs/tools.yaml"
     shell:
         """
+        samtools faidx {input.fa}
         # Make windows for chm13v2.0
         # Query all regions from ava alignment.
         impg query \
         -t {threads} \
-        -b <(bedtools makewindows -b <(awk -v OFS="\\t" '{{ print "{params.chm13_prefix}"$1, 0, $2 }}' {input.fai} | grep -v chrY) -w {params.window}) \
+        -b <(bedtools makewindows -b <(awk -v OFS="\\t" '{{ print "{params.chm13_prefix}"$1, 0, $2 }}' {input.fa}.fai | grep -v chrY) -w {params.window}) \
         -p {input.paf} \
         -d {params.bp_merge} | \
         gzip > {output.bed}

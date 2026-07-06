@@ -45,7 +45,7 @@ rule convert_annotations_to_bed:
 
 saffire_cfg = {
     "ref": {
-        "CHM13v2.0": join(OUTPUT_DIR, "..", "assembly", "reference", "chm13v2.0.fa.gz")
+        "CHM13v2.0": ASM_CHM13
     },
     "sm": {
         "HG002v1.0.1": expand(rules.download_curated_asm.output.fa, version="v1.0.1")
@@ -89,9 +89,7 @@ rule liftover_from_chm13_paf2chain:
 rule liftover_cytobands_from_chm13:
     input:
         chain=rules.liftover_from_chm13_paf2chain.output,
-        cytobands_chm13=join(
-            OUTPUT_DIR, "..", "assembly", "annot", "chm13v2.0_cytobands_allchrs.bed"
-        ),
+        cytobands_chm13=CYTOBANDS_CHM13,
     output:
         cytobands=join(IDEOGRAM_OUTPUT_DIR, "{ref}_{sm}_cytobands.bed"),
         cytobands_unmapped=join(

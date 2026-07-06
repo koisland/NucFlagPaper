@@ -10,19 +10,26 @@ config:
   flagger_ont_r10: "workflow/scripts/flagger/misc/alpha_tsv/ONT_R1041_Dorado/alpha_optimum_trunc_exp_gaussian_w_8000_n_50.ONT_R1041_Dorado_DEC_2024.v1.1.0.tsv"
   element_curated: "config/nucflag_element_curated.toml"
   hifi_curated: "config/nucflag_hifi_curated.toml"
+# Figure 2
 simulate:
-  manifest: "data/HG002/manifest.tsv"
+  manifest: "data/assemblies/manifest.tsv"
+  # Only run this sample in manifest
+  samples:
+  - HG002
   group_by:
     HG002: "^(.*?)_(.*?)$"
+# Figure 4
 assembly_config:
   manifest: "config/config_assembly.yaml"
   nucflag_hifi: "config/nucflag_hifi_chm13.toml"
   nucflag_ont: "config/nucflag_ont_chm13.toml"
+# Figure 6
 hprc:
   manifest: "data/compare_hprc/hprc_all_manifest.csv"
   annotations_segdups:
     R1: data/compare_hprc/Year1_assemblies_v2_genbank_Seg_Dups.index.gz
     R2: data/compare_hprc/segdups_hprc_r2_v1.1.index.csv.gz
+# Figure 5
 nonhuman:
   bed_centromeres:
     Col-CEN: data/nonhuman/Col-CEN_centromeres.bed

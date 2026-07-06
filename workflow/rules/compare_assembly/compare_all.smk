@@ -5,6 +5,10 @@ ANNOT_COLORS = {
 ANNOT_TITLE = {"censat": "Centromere satellites", "segdups": "Segmental duplications"}
 
 
+wildcard_constraints:
+    annot="|".join(ANNOT_COLORS.keys())
+
+
 rule plot_compare_misassemblies:
     input:
         calls=[

@@ -11,6 +11,7 @@ module CompareHPRCReleases:
                 "R1": config["hprc"]["annotations_segdups"]["R1"],
                 "R2": config["hprc"]["annotations_segdups"]["R2"],
             },
+            "asm_chm13": DATA["CHM13"].get_first("assembly").path,
         }
 
 

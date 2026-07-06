@@ -1,15 +1,33 @@
 # NucFlag Paper
-Code for NucFlag paper.
+Code for NucFlag paper and benchmarking.
 
 ## Getting started
+Clone repo and its submodules.
+```bash
+git clone https://github.com/koisland/NucFlagPaper.git --recursive
+```
+
 Create conda environment.
 ```bash
 conda create --name NucFlagPaper bioconda::snakemake==9.5.0
 ```
 
-To run:
+## Usage
+To run all analyses for paper:
 ```bash
-snakemake -np --configfile config/config.yaml
+which apptainer
+# Replace profiles/default/ with preferred execution method and rop -e.
+snakemake -np --configfile config/config.yaml -e local
+```
+
+To run just assembly error simulation.
+```bash
+TODO
+```
+
+To run assembly benchmarking for hifiasm and verkko with different versions.
+```bash
+TODO
 ```
 
 ## Organization
@@ -79,8 +97,9 @@ Rules are split as follows. Each rule is an entrypoint with an associated subdir
 ## Cite
 
 ## TODO
-* [ ] - Version and use Zenodo
-* [ ] - Download CHM13 data automatically for assembly comparison.
-* [ ] - Refactor to run in parts.
-* [ ] - Rename so better structured (ex. `1-*`, `2-*` )
-* [ ] - Test using pixi
+* [ ] Version and use Zenodo
+* [x] Download CHM13 data automatically for assembly comparison.
+* [ ] Refactor to run in parts.
+* [ ] Rename so better structured (ex. `1-*`, `2-*` )
+* [ ] Test using pixi
+* [ ] Fork repo into separate workflow for benchmarking.

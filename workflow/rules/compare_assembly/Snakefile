@@ -12,33 +12,19 @@ ASM_COLORS = {
     "CHM13_verkko_2.2.1": "blue",
     "CHM13_verkko_2.3": "teal",
 }
+ASM_CHM13 = config["asm_chm13"]
 REF_SM = "CHM13v2.0"
 
 
 def get_assembly(sm):
     if sm == "CHM13v2.0":
-        return rules.download_chm13.output.fa
+        return ASM_CHM13
     elif sm.split("_")[1] == "verkko":
         return expand(rules.denovo_verkko_output.output, asm=sm.split("_")[1], sm=sm)[0]
     else:
         return expand(rules.denovo_hifiasm_output.output, asm=sm.split("_")[1], sm=sm)[
             0
         ]
-
-
-rule download_chm13:
-    output:
-        fa=join(OUTPUT_DIR, "reference", "chm13v2.0.fa.gz"),
-        fai=join(OUTPUT_DIR, "reference", "chm13v2.0.fa.gz.fai"),
-    params:
-        url="https://s3-us-west-2.amazonaws.com/human-pangenomics/T2T/CHM13/assemblies/analysis_set/chm13v2.0.fa.gz",
-    conda:
-        "../../envs/curated.yaml"
-    shell:
-        """
-        wget {params.url} -O {output.fa}
-        samtools faidx {output.fa}
-        """
 
 
 module DenovoAssembly:
@@ -51,19 +37,13 @@ module DenovoAssembly:
 use rule * from DenovoAssembly as denovo_*
 
 
-def get_reads_from_glob(data_src: dict) -> list[str]:
-    data_dir = data_src["path"]
-    glob_include = data_src["include"][0]
-    return glob.glob(join(data_dir, glob_include))
-
-
 NF_SAMPLES = [
     {
         # Must have no underscores.
         # Format: SM_verkko or SM_hifiasm
         "name": f"{sm}_{dtype}",
         "asm_fa": get_assembly(sm),
-        "reads": get_reads_from_glob(config["samples"][sm]["data"][dtype]),
+        "reads": config["samples"][sm]["data"][dtype]["path"],
         "config": NUCFLAG_CONFIG[dtype],
     }
     for sm in config["samples"].keys()
@@ -74,11 +54,9 @@ NF_SAMPLES.extend(
     (
         {
             "name": f"{REF_SM}_{dtype}",
-            "asm_fa": rules.download_chm13.output.fa,
+            "asm_fa": ASM_CHM13,
             # All reads the same.
-            "reads": get_reads_from_glob(
-                config["samples"]["CHM13_verkko_2.2.1"]["data"][dtype]
-            ),
+            "reads": config["samples"]["CHM13_verkko_2.2.1"]["data"][dtype]["path"],
             "config": NUCFLAG_CONFIG[dtype],
         }
         for dtype in ["hifi", "ont"]

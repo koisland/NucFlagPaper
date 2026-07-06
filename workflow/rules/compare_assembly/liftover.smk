@@ -28,7 +28,7 @@ rule download_annotations:
 
 
 saffire_cfg = {
-    "ref": {"CHM13v2.0": rules.download_chm13.output.fa},
+    "ref": {"CHM13v2.0": ASM_CHM13},
     "sm": {sm: get_assembly(sm) for sm in config["samples"].keys()},
     "temp_dir": join(OUTPUT_DIR, "saffire", "temp"),
     "output_dir": join(OUTPUT_DIR, "saffire"),

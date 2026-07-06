@@ -10,7 +10,8 @@ HIFI = config["hifi"]
 CONFIG = config["config"]
 CONFIG_ELEMENT = config["config_element"]
 FLAGGER_ALPHA = config["alpha"]
-
+ASM_CHM13 = config["asm_chm13"]
+CYTOBANDS_CHM13 = config["cytobands_chm13"]
 
 VCFS = {
     "v1.0.1": "https://github.com/marbl/HG002-issues/raw/refs/heads/main/patches/already_applied/hg002v1.0.1_to_hg002v1.1.vcf.gz",
