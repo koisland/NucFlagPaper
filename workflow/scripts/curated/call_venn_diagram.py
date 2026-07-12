@@ -3,7 +3,6 @@ import argparse
 import numpy as np
 import polars as pl
 import matplotlib.pyplot as plt
-import matplotlib.patheffects as pe
 
 from typing import TextIO
 from intervaltree import Interval, IntervalTree
@@ -36,6 +35,8 @@ LEGEND_KWARGS = dict(
     alignment="left",
 )
 plt.rcParams["font.family"] = "Arial"
+plt.rcParams["pdf.fonttype"] = 42
+plt.rcParams["text.usetex"] = False
 
 
 def minimalize_ax(ax: Axes, *, remove_ticks: bool = False) -> None:
@@ -253,7 +254,7 @@ def main():
             bars,
             bar_labels,
             fontsize=7.5,
-            path_effects=[pe.withStroke(linewidth=2.0, foreground="white")],
+            # path_effects=[pe.withStroke(linewidth=2.0, foreground="white")],
         )
 
     # Add final hatched bar
@@ -274,7 +275,7 @@ def main():
         homopolymer_bars,
         homopolymer_bar_labels,
         fontsize=7.5,
-        path_effects=[pe.withStroke(linewidth=2.0, foreground="white")],
+        # path_effects=[pe.withStroke(linewidth=2.0, foreground="white")],
     )
     ax_intersections.set_ylabel("# of error calls")
     ax_intersections.legend(

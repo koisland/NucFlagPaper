@@ -8,6 +8,8 @@ from matplotlib.axes import Axes
 from matplotlib.patches import Patch
 
 plt.rcParams["font.family"] = "Arial"
+plt.rcParams["pdf.fonttype"] = 42
+plt.rcParams["text.usetex"] = False
 
 CHROMS = [f"chr{i}" for i in range(1, 23)] + ["chrXY"]
 CALL_COLOR_KEY = {

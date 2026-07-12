@@ -51,6 +51,8 @@ SEGDUP_COLORS = dict(
     )
 )
 plt.rcParams["font.family"] = "Arial"
+plt.rcParams["pdf.fonttype"] = 42
+plt.rcParams["text.usetex"] = False
 
 
 def minimalize_ax(ax: Axes, *, remove_ticks: bool = False) -> None:
@@ -375,6 +377,7 @@ def main():
 
         outfile_prefix = os.path.join(args.output_dir, f"{rchrom}")
         fig.savefig(f"{outfile_prefix}.png", bbox_inches="tight", dpi=300)
+        fig.savefig(f"{outfile_prefix}.pdf", bbox_inches="tight", dpi=300)
         plt.close(fig)
 
         # Create figure for each

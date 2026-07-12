@@ -14,6 +14,8 @@ LEGEND_KWARGS = dict(
     frameon=False,
 )
 plt.rcParams["font.family"] = "Arial"
+plt.rcParams["pdf.fonttype"] = 42
+plt.rcParams["text.usetex"] = False
 
 
 def main():

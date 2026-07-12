@@ -41,6 +41,8 @@ LEGEND_KWARGS = dict(
     edgecolor="black",
 )
 plt.rcParams["font.family"] = "Arial"
+plt.rcParams["pdf.fonttype"] = 42
+plt.rcParams["text.usetex"] = False
 
 
 def minimalize_ax(ax: Axes, *, remove_ticks: bool = False) -> None:

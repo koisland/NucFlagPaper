@@ -2,7 +2,6 @@ import argparse
 import polars as pl
 import seaborn as sns
 import matplotlib.pyplot as plt
-import matplotlib.patheffects as pe
 
 from matplotlib.axes import Axes
 from matplotlib.colors import rgb2hex
@@ -36,6 +35,8 @@ SMALL_ERRORS = (
     "het_or_mismap",
 )
 plt.rcParams["font.family"] = "Arial"
+plt.rcParams["pdf.fonttype"] = 42
+plt.rcParams["text.usetex"] = False
 
 
 def draw_grouped_bar_w_calls_by_asm(
@@ -102,7 +103,7 @@ def draw_grouped_bar_w_calls_by_asm(
         # Color and stroke around text
         lbl.set_color(call_palette[lbl.get_text()])
         lbl.set_fontsize(14)
-        lbl.set_path_effects([pe.Stroke(linewidth=0.1, foreground="black")])
+        # lbl.set_path_effects([pe.Stroke(linewidth=0.1, foreground="black")])
         lbl.set_rotation(45)
         lbl.set_horizontalalignment("right")
         lbl.set_rotation_mode("anchor")

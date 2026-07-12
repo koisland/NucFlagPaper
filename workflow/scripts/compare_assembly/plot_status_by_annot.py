@@ -2,13 +2,13 @@ import argparse
 import polars as pl
 import seaborn as sns
 import matplotlib.pyplot as plt
-import matplotlib.patheffects as pe
 
 from matplotlib.axes import Axes
 from matplotlib.patches import Patch
 
 plt.rcParams["font.family"] = "Arial"
-
+plt.rcParams["pdf.fonttype"] = 42
+plt.rcParams["text.usetex"] = False
 
 LEGEND_KWARGS = dict(
     handlelength=1.0,
@@ -25,7 +25,7 @@ def format_bar_ax(ax: Axes, name_colors: dict[str, str]):
 
     for lbl in ax.xaxis.get_majorticklabels():
         lbl_text = lbl.get_text()
-        lbl.set_path_effects([pe.Stroke(linewidth=0.1, foreground="black")])
+        # lbl.set_path_effects([pe.Stroke(linewidth=0.1, foreground="black")])
         lbl.set_color(name_colors[lbl_text])
         lbl.set_rotation(45)
         lbl.set_horizontalalignment("right")
@@ -50,7 +50,7 @@ def format_group_length_ax(ax: Axes, name_colors: dict[str, str]):
 
     for lbl in ax.xaxis.get_majorticklabels():
         lbl_text = lbl.get_text()
-        lbl.set_path_effects([pe.Stroke(linewidth=0.1, foreground="black")])
+        # lbl.set_path_effects([pe.Stroke(linewidth=0.1, foreground="black")])
         lbl.set_color(name_colors[lbl_text])
         lbl.set_rotation(45)
         lbl.set_horizontalalignment("right")
@@ -162,6 +162,7 @@ def main():
     fig.savefig(f"{args.output_prefix}.png", bbox_inches="tight", dpi=300)
     fig.savefig(f"{args.output_prefix}.pdf", bbox_inches="tight", dpi=300)
     fig_legend.savefig(f"{args.output_prefix}_legend.png", bbox_inches="tight", dpi=300)
+    fig_legend.savefig(f"{args.output_prefix}_legend.pdf", bbox_inches="tight", dpi=300)
 
 
 if __name__ == "__main__":

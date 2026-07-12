@@ -10,6 +10,8 @@ from matplotlib.patches import Patch
 from matplotlib.colors import rgb2hex
 
 plt.rcParams["font.family"] = "Arial"
+plt.rcParams["pdf.fonttype"] = 42
+plt.rcParams["text.usetex"] = False
 
 CALL_COLOR_KEY = {
     "curated": "black",

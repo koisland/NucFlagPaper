@@ -2,12 +2,13 @@ import argparse
 import polars as pl
 import seaborn as sns
 import matplotlib.pyplot as plt
-import matplotlib.patheffects as pe
 
 from matplotlib.axes import Axes
 from matplotlib.colors import rgb2hex
 
 plt.rcParams["font.family"] = "Arial"
+plt.rcParams["pdf.fonttype"] = 42
+plt.rcParams["text.usetex"] = False
 
 LEGEND_KWARGS = dict(
     handlelength=1.0,
@@ -72,7 +73,7 @@ def draw_bar_all(
         # Color and stroke around text
         lbl.set_color(name_colors[lbl.get_text()])
         lbl.set_fontsize(18)
-        lbl.set_path_effects([pe.Stroke(linewidth=0.1, foreground="black")])
+        # lbl.set_path_effects([pe.Stroke(linewidth=0.1, foreground="black")])
         lbl.set_rotation(45)
         lbl.set_horizontalalignment("right")
         lbl.set_rotation_mode("anchor")

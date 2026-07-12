@@ -3,7 +3,6 @@ import argparse
 import sys
 import polars as pl
 import matplotlib.pyplot as plt
-import matplotlib.patheffects as pe
 
 from collections import deque
 from itertools import islice
@@ -11,6 +10,8 @@ from bisect import bisect
 
 
 plt.rcParams["font.family"] = "Arial"
+plt.rcParams["pdf.fonttype"] = 42
+plt.rcParams["text.usetex"] = False
 
 
 # https://docs.python.org/3/library/itertools.html
@@ -87,7 +88,7 @@ def main():
             (x_ng50_cov, y_ng50),
             color=color,
             fontsize=18,
-            path_effects=[pe.withStroke(linewidth=4.0, foreground="white")],
+            # path_effects=[pe.withStroke(linewidth=4.0, foreground="white")],
         )
         # ax.axhline(y=y_ng50, linestyle="dotted", color=color)
         # ax.axhline(y=aun, linestyle="dashed", color=color)

@@ -9,7 +9,8 @@ from matplotlib.axes import Axes
 from scipy.stats import normaltest, ks_2samp, false_discovery_control
 
 plt.rcParams["font.family"] = "Arial"
-
+plt.rcParams["pdf.fonttype"] = 42
+plt.rcParams["text.usetex"] = False
 
 NT_COLORS = {
     "A": "#009600",
